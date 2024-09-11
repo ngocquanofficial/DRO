@@ -315,7 +315,7 @@ class CustomLinear2(nn.Module):
         for i in range(self.num_particles):
             res = torch.nn.functional.linear(x[i], self.weight, self.bias) #torch.nn.functional.linear(x[i], self.weight, self.bias) #torch.matmul(x[i], self.weight) + self.bias
             final_res.append(res)
-                    
+        
         return final_res#[0]
             
 class CustomDropout(nn.Module):
@@ -442,7 +442,7 @@ class Block(nn.Module):
         h = self.drop(self.pwff(self.norm2(x)))[0]
         x = x[0] + h
         return [x]
-        
+       
 
 class Transformer(nn.Module):
     """Transformer with Self-Attentive Blocks"""
@@ -458,7 +458,7 @@ class Transformer(nn.Module):
         x = []
         for i in range(self.num_particles):
             x.append(orginal_x.detach())
-            
+    
         for block in self.blocks:
             x = block(x, mask)
             
@@ -508,6 +508,7 @@ class ViT(nn.Module):
         num_classes: Optional[int] = None,
         num_particles: int = 1,
         weight_path: str = 'weight_path',
+        dirichlet_const = 5.0,        # FOR DRO
     ):
         super().__init__()
         
@@ -597,6 +598,9 @@ class ViT(nn.Module):
                     image_size != pretrained_image_size),
             )
 
+        # For DRO problem
+        self.dirichlet_const = dirichlet_const 
+
     @torch.no_grad()
     def init_weights(self):
         def _init(m):
@@ -633,12 +637,29 @@ class ViT(nn.Module):
             x = self.pre_logits(x)
             x = torch.tanh(x)
             print('pre_logit', x.shape)
+
+
         if hasattr(self, 'fc'):
+            
+            # Get random parameter
+            if self.training :
+                dirichlet_const = torch.tensor([self.dirichlet_const for i in range(self.num_particles)])
+                dirichlet = torch.distributions.Dirichlet(dirichlet_const)
+                sample = dirichlet.sample()
+            else :
+                sample = torch.tensor([1/self.num_particles for i in range(self.num_particles)])
+            
+
             x = self.norm(x)# [:, 0]  # b,d
             res = []
             for i in range(self.num_particles):
                 res_i = x[i][:, 0]  # b,d
+                
+                # Weighted output between particles (FOR DRO)
+                res_i = res_i * sample[i] * self.num_particles
+
                 res.append(res_i)
+                
             x = self.fc(res)  # b,num_classes
 
         return x

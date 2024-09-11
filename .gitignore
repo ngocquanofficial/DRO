@@ -3,7 +3,8 @@ output/
 things/
 weights/
 notebooks/
-
+checkpoint/
+cifar100/images/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
