@@ -6,14 +6,14 @@ trainer:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
       save_dir: output
-      name: cifar100-lora-r16-lr-0.05_svgd_3p_bs24_sam_weighted.output_no.SAM
+      name: cifar100-lora-r16-lr-0.15_svgd_3p_bs24_sam_original
   max_steps: 10000
   val_check_interval: 500
 model:
   model_name: vit-b16-224-dino
   training_mode: lora
   optimizer: svgd
-  lr: 0.05
+  lr: 0.15
   momentum: 0.9
   weight_decay: 0.0
   scheduler: cosine
@@ -26,7 +26,7 @@ data:
   dataset: cifar100
   root: cifar100
   size: 224
-  batch_size: 24
+  batch_size: 2
   workers: 4
 model_checkpoint:
   filename: best-step-{step}-{val_acc:.4f}
