@@ -65,24 +65,28 @@ class RBF(torch.nn.Module):
         
     return K_XY
   
-
 class SVGD(torch.optim.Adam):
-    def __init__(self, param, lr, betas, weight_decay, num_particles, train_module, net):
-        super(SVGD, self).__init__(param, lr, betas, weight_decay)
-        self.K = RBF()
+    def __init__(self, param, base_optimizer, lr=0, betas=(0.9, 0.999), weight_decay=0, num_particles=0, train_module=0, net=None, rho=0.05, adaptive=False, **kwargs):
+
+        # Base optimizer arguments
+        defaults = dict(lr=lr, betas=betas, weight_decay=weight_decay, num_particles=num_particles, train_module=train_module, net=net, rho=rho, adaptive=adaptive, **kwargs)
+        
+        # Initialize the base optimizer (Adam)
+        super(SVGD, self).__init__(param, lr=lr, betas=betas, weight_decay=weight_decay)  # Pass individual arguments
+        
         self.net = net
         self.num_particles = num_particles
         self.lr = lr
         self.train_module = train_module
+
+        self.rho = rho
+        self.adaptive = adaptive
+
+        # Initialize base optimizer
+        self.base_optimizer = base_optimizer(self.param_groups, **kwargs)
+        self.param_groups = self.base_optimizer.param_groups
+        self.defaults.update(self.base_optimizer.defaults)
         
-        # print(self.net)
-            
-        # self.based_optim = torch.optim.Adam(
-        #         params,
-        #         lr=lr,
-        #         betas=betas,
-        #         weight_decay=weight_decay,
-        #     )
         
     def get_learnable_block(self): #for LoRA        
         q_A = torch.empty(0).cuda()
@@ -266,292 +270,109 @@ class SVGD(torch.optim.Adam):
         # exit()
                     
         return q_A, q_B, v_A, v_B, cls_w, cls_b
-    
-    def kernel_func(self, q_A, q_B, v_A, v_B, clsW, clsB):
 
-        q_A.requires_grad = True
-        q_B.requires_grad = True
-        v_A.requires_grad = True
-        v_B.requires_grad = True
-        clsW.requires_grad = True
-        clsB.requires_grad = True
+
+    @torch.no_grad()
+    def step1(self, zero_grad=False):
+        """First step: Perturb particle-specific parameters using SAM logic and save the original parameters."""
         
-        kernel_qA = self.K(q_A)
-        self.train_module.manual_backward(kernel_qA.sum())
-        q_A_grad = q_A.grad
-        
-        kernel_qB = self.K(q_B)
-        self.train_module.manual_backward(kernel_qB.sum())
-        q_B_grad = q_B.grad
-        
-        kernel_vA = self.K(v_A)
-        self.train_module.manual_backward(kernel_vA.sum())
-        v_A_grad = v_A.grad
-        
-        kernel_vB = self.K(v_B)
-        self.train_module.manual_backward(kernel_vB.sum())
-        v_B_grad = v_B.grad
-        
-        kernel_clsW = self.K(clsW)
-        self.train_module.manual_backward(kernel_clsW.sum())
-        clsW_gradK = clsW.grad
-        
-        kernel_clsB = self.K(clsB)
-        self.train_module.manual_backward(kernel_clsB.sum())
-        clsB_gradK = clsB.grad
-        
-        return kernel_qA, kernel_qB, kernel_vA, kernel_vB, kernel_clsW, kernel_clsB, q_A_grad, q_B_grad, v_A_grad, v_B_grad, clsW_gradK, clsB_gradK
-        
-    def step1(self):
-        # get grad (1)
-        q_A_grad, q_B_grad, v_A_grad, v_B_grad, clsW_grad, clsB_grad = self.get_grad1() #dlog_prob(X)'
-        # grad_tuple = (q_A_grad, q_B_grad, v_A_grad, v_B_grad, clsW_grad, clsB_grad)
-        
-        # get kerr
-        self.zero_grad()
-        q_A, q_B, v_A, v_B, clsW, clsB = self.get_learnable_block()
-        q_A, q_B, v_A, v_B, clsW, clsB = q_A.clone().detach().requires_grad_(True), q_B.clone().detach().requires_grad_(True), v_A.clone().detach().requires_grad_(True), v_B.clone().detach().requires_grad_(True),  clsW.clone().detach().requires_grad_(True), clsB.clone().detach().requires_grad_(True)
-        org_weight_tuple = (q_A, q_B, v_A, v_B, clsW, clsB)
-        
-        if q_A.shape[0] > 0:
-            kernel_qA, kernel_qB, kernel_vA, kernel_vB, kernel_clsW, kernel_clsB, q_A_gradK, q_B_gradK, v_A_gradK, v_B_gradK, clsW_gradK, clsB_gradK = self.kernel_func(q_A, q_B, v_A, v_B, clsW, clsB) #self.K(self.X, self.X.detach())
-        else:
-            kernel_qA, kernel_qB, kernel_vA, kernel_vB, kernel_clsW, kernel_clsB, q_A_gradK, q_B_gradK, v_A_gradK, v_B_gradK, clsW_gradK, clsB_gradK = torch.ones(size=(q_A_grad.shape[0], q_A_grad.shape[0])).cuda(), torch.ones(size=(q_A_grad.shape[0], q_A_grad.shape[0])).cuda(), torch.ones(size=(q_A_grad.shape[0], q_A_grad.shape[0])).cuda(), torch.ones(size=(q_A_grad.shape[0], q_A_grad.shape[0])).cuda(), torch.ones(size=(q_A_grad.shape[0], q_A_grad.shape[0])).cuda(), torch.ones(size=(q_A_grad.shape[0], q_A_grad.shape[0])).cuda(), 0, 0, 0, 0, 0, 0
-    
-        kernel_tuple = (kernel_qA, kernel_qB, kernel_vA, kernel_vB, kernel_clsW, kernel_clsB, q_A_gradK, q_B_gradK, v_A_gradK, v_B_gradK, clsW_gradK, clsB_gradK)
-        
-        
-        # update perturbed weights
-        updated_n = []
-        
+        # Get the particle-specific gradients for all LoRA layers
+        q_A_grad, q_B_grad, v_A_grad, v_B_grad, clsW_grad, clsB_grad = self.get_grad1()
+
+        # Create a set to keep track of the updated parameters
+        updated_n = set()
+
         for net_id in range(self.num_particles):
-            for layer_id in range(12):   
+            for layer_id in range(12):  # Assuming 12 layers
                 for n, p in self.net.lora_vit.named_parameters():
-                    
-                    if p.requires_grad and n not in updated_n: 
-                    
+                    if p.requires_grad and n not in updated_n:
+
+
+                        # Perturb the specific gradients for each particle and layer
                         if f'blocks.{str(layer_id)}' in n:
-                            # print('B-name', n)
                             if "proj_q" in n:
                                 if f"w_a.layer.{net_id}" in n:
-                                    # print(n)
-                                    updated_n.append(n)
-                                    temp_w = p.data
-                                    p.data = temp_w + self.lr * q_A_grad[layer_id][net_id].view(p.data.shape)
+                                    # Save the original parameters for each particle and layer
+                                    self.state[p]['old_p'] = p.data.clone()
+                                    perturb = self.rho * q_A_grad[layer_id][net_id] / (q_A_grad[layer_id][net_id].norm() + 1e-12)
+                                    p.add_(perturb.view(p.data.shape))  # Apply perturbation
                                 elif f"w_b.layer.{net_id}" in n:
-                                    # print(n)
-                                    updated_n.append(n)
-                                    temp_w = p.data
-                                    p.data = temp_w + self.lr * q_B_grad[layer_id][net_id].view(p.data.shape)
+                                    self.state[p]['old_p'] = p.data.clone()
+                                    perturb = self.rho * q_B_grad[layer_id][net_id] / (q_B_grad[layer_id][net_id].norm() + 1e-12)
+                                    p.add_(perturb.view(p.data.shape))  # Apply perturbation
                             elif "proj_v" in n:
                                 if f"w_a.layer.{net_id}" in n:
-                                    # print(n)
-                                    updated_n.append(n)
-                                    temp_w = p.data
-                                    p.data = temp_w + self.lr * v_A_grad[layer_id][net_id].view(p.data.shape)
+                                    self.state[p]['old_p'] = p.data.clone()
+                                    perturb = self.rho * v_A_grad[layer_id][net_id] / (v_A_grad[layer_id][net_id].norm() + 1e-12)
+                                    p.add_(perturb.view(p.data.shape))  # Apply perturbation
                                 elif f"w_b.layer.{net_id}" in n:
-                                    # print(n)
-                                    updated_n.append(n)
-                                    temp_w = p.data
-                                    p.data = temp_w + self.lr * v_B_grad[layer_id][net_id].view(p.data.shape)
-                                    
+                                    self.state[p]['old_p'] = p.data.clone()
+                                    perturb = self.rho * v_B_grad[layer_id][net_id] / (v_B_grad[layer_id][net_id].norm() + 1e-12)
+                                    p.add_(perturb.view(p.data.shape))  # Apply perturbation
                         elif 'fc' in n:
                             if 'weight' in n:
-                                if f"layer.{net_id}" in n:
-                                    # print(n)
-                                    updated_n.append(n)
-                                    temp_w = p.data
-                                    p.data = temp_w + self.lr * clsW_grad[layer_id][net_id].view(p.data.shape)
-                            elif 'bias' in n and f"layer.{net_id}" in n:
-                                    # print(n)
-                                    updated_n.append(n)
-                                    temp_w = p.data
-                                    p.data = temp_w + self.lr * clsB_grad[layer_id][net_id].view(p.data.shape)
-                                    
-        return org_weight_tuple, kernel_tuple
-    
-    def step2(self, org_weight_tuple, kernel_tuple):
-        q_A_grad, q_B_grad, v_A_grad, v_B_grad, clsW_grad, clsB_grad = self.get_grad1() #dlog_prob(X)'
-        q_A, q_B, v_A, v_B, clsW, clsB = org_weight_tuple
-        kernel_qA, kernel_qB, kernel_vA, kernel_vB, kernel_clsW, kernel_clsB, q_A_gradK, q_B_gradK, v_A_gradK, v_B_gradK, clsW_gradK, clsB_gradK = kernel_tuple
-        
-        #compute score func:
-        grad_qA = (-kernel_qA.detach().matmul(q_A_grad) + q_A_gradK) / self.num_particles
-        
-        grad_qB = (-kernel_qB.detach().matmul(q_B_grad) + q_B_gradK) / self.num_particles
+                                self.state[p]['old_p'] = p.data.clone()
+                                perturb = self.rho * clsW_grad[layer_id][net_id] / (clsW_grad[layer_id][net_id].norm() + 1e-12)
+                                p.add_(perturb.view(p.data.shape))  # Apply perturbation
+                            elif 'bias' in n:
+                                self.state[p]['old_p'] = p.data.clone()
+                                perturb = self.rho * clsB_grad[layer_id][net_id] / (clsB_grad[layer_id][net_id].norm() + 1e-12)
+                                p.add_(perturb.view(p.data.shape))  # Apply perturbation
+                        
+                        # Mark this parameter as updated
+                        updated_n.add(n)
 
-        grad_vA = (-kernel_vA.detach().matmul(v_A_grad) + v_A_gradK) / self.num_particles
+        if zero_grad:
+            self.zero_grad()
 
-        grad_vB = (-kernel_vB.detach().matmul(v_B_grad) + v_B_gradK) / self.num_particles
+    @torch.no_grad()
+    def step2(self, zero_grad=False):
+        """Second step: Restore original parameters and apply the gradient update."""
         
-        grad_clsW = (-kernel_clsW.detach().matmul(clsW_grad) + clsW_gradK) / self.num_particles
-        
-        grad_clsB = (-kernel_clsB.detach().matmul(clsB_grad) + clsB_gradK) / self.num_particles
-        
-        #update weight:
-        updated_n = []
-        
+        # Restore the original parameters
+        updated_n = set()  # Track which parameters have been restored
+
         for net_id in range(self.num_particles):
-            for layer_id in range(12):   
+            for layer_id in range(12):  # Assuming 12 layers
                 for n, p in self.net.lora_vit.named_parameters():
-                    
-                    if p.requires_grad and n not in updated_n: 
-                    
+                    if p.requires_grad and n not in updated_n:
+                        # Restore the original parameters for each particle and layer
+
                         if f'blocks.{str(layer_id)}' in n:
-                            # print('B-name', n)
                             if "proj_q" in n:
                                 if f"w_a.layer.{net_id}" in n:
-                                    # print(n)
-                                    updated_n.append(n)
-                                    # temp_w = p.data
-                                    p.data = q_A[layer_id][net_id].view(p.data.shape) + self.lr * grad_qA[layer_id][net_id].view(p.data.shape)
+                                    p.data = self.state[p]['old_p']
                                 elif f"w_b.layer.{net_id}" in n:
-                                    # print(n)
-                                    updated_n.append(n)
-                                    # temp_w = p.data
-                                    p.data = q_B[layer_id][net_id].view(p.data.shape) + self.lr * grad_qB[layer_id][net_id].view(p.data.shape)
+                                    p.data = self.state[p]['old_p']
                             elif "proj_v" in n:
                                 if f"w_a.layer.{net_id}" in n:
-                                    # print(n)
-                                    updated_n.append(n)
-                                    # temp_w = p.data
-                                    p.data = v_A[layer_id][net_id].view(p.data.shape) + self.lr * grad_vA[layer_id][net_id].view(p.data.shape)
+                                    p.data = self.state[p]['old_p']
                                 elif f"w_b.layer.{net_id}" in n:
-                                    # print(n)
-                                    updated_n.append(n)
-                                    # temp_w = p.data
-                                    p.data = v_B[layer_id][net_id].view(p.data.shape) + self.lr * grad_vB[layer_id][net_id].view(p.data.shape)
-                                    
+                                    p.data = self.state[p]['old_p']
                         elif 'fc' in n:
                             if 'weight' in n:
-                                if f"layer.{net_id}" in n:
-                                    # print(n)
-                                    updated_n.append(n)
-                                    # temp_w = p.data
-                                    p.data = clsW[layer_id][net_id].view(p.data.shape) + self.lr * grad_clsW[layer_id][net_id].view(p.data.shape)
-                            elif 'bias' in n and f"layer.{net_id}" in n:
-                                    # print(n)
-                                    updated_n.append(n)
-                                    temp_w = p.data
-                                    p.data = clsB[layer_id][net_id].view(p.data.shape) + self.lr * grad_clsB[layer_id][net_id].view(p.data.shape)
-        
-    
-    def score_func(self):
-        q_A_grad, q_B_grad, v_A_grad, v_B_grad, clsW_grad, clsB_grad = self.get_grad1() #dlog_prob(X)'
-        
-        # try:
-        #     cls_grad_w = self.net.lora_vit.fc.weight.grad.data
-        #     cls_grad_b = self.net.lora_vit.fc.bias.grad.data
-        # except:
-        #     cls_grad_w = self.net.fc.weight.grad.data
-        #     cls_grad_b = self.net.fc.bias.grad.data
-            
-        # print('gradd_cls', cls_grad_w.sum(), cls_grad_w)
-        
-        self.zero_grad()
-        q_A, q_B, v_A, v_B, clsW, clsB = self.get_learnable_block()
-        q_A, q_B, v_A, v_B, clsW, clsB = q_A.clone().detach().requires_grad_(True), q_B.clone().detach().requires_grad_(True), v_A.clone().detach().requires_grad_(True), v_B.clone().detach().requires_grad_(True),  clsW.clone().detach().requires_grad_(True), clsB.clone().detach().requires_grad_(True)
-        
-        if q_A.shape[0] > 0:
-            kernel_qA, kernel_qB, kernel_vA, kernel_vB, kernel_clsW, kernel_clsB, q_A_gradK, q_B_gradK, v_A_gradK, v_B_gradK, clsW_gradK, clsB_gradK = self.kernel_func(q_A, q_B, v_A, v_B, clsW, clsB) #self.K(self.X, self.X.detach())
-        else:
-            kernel_qA, kernel_qB, kernel_vA, kernel_vB, kernel_clsW, kernel_clsB, q_A_gradK, q_B_gradK, v_A_gradK, v_B_gradK, clsW_gradK, clsB_gradK = torch.ones(size=(q_A_grad.shape[0], q_A_grad.shape[0])).cuda(), torch.ones(size=(q_A_grad.shape[0], q_A_grad.shape[0])).cuda(), torch.ones(size=(q_A_grad.shape[0], q_A_grad.shape[0])).cuda(), torch.ones(size=(q_A_grad.shape[0], q_A_grad.shape[0])).cuda(), torch.ones(size=(q_A_grad.shape[0], q_A_grad.shape[0])).cuda(), torch.ones(size=(q_A_grad.shape[0], q_A_grad.shape[0])).cuda(), 0, 0, 0, 0, 0, 0
-        
-        grad_qA = (-kernel_qA.detach().matmul(q_A_grad) + q_A_gradK) / self.num_particles
-        
-        grad_qB = (-kernel_qB.detach().matmul(q_B_grad) + q_B_gradK) / self.num_particles
+                                p.data = self.state[p]['old_p']
+                            elif 'bias' in n:
+                                p.data = self.state[p]['old_p']
+                        # Mark this parameter as updated
+                        updated_n.add(n)
 
-        grad_vA = (-kernel_vA.detach().matmul(v_A_grad) + v_A_gradK) / self.num_particles
+        self. base_optimizer.step()
 
-        grad_vB = (-kernel_vB.detach().matmul(v_B_grad) + v_B_gradK) / self.num_particles
-        
-        grad_clsW = (-kernel_clsW.detach().matmul(clsW_grad) + clsW_gradK) / self.num_particles
-        
-        grad_clsB = (-kernel_clsB.detach().matmul(clsB_grad) + clsB_gradK) / self.num_particles
-        
-        # grad_qA, grad_qB, grad_vA, grad_vB = -q_A_grad, -q_B_grad, -v_A_grad, -v_B_grad
-        
-        return grad_qA, grad_qB, grad_vA, grad_vB, grad_clsW, grad_clsB
+        if zero_grad:
+            self.zero_grad()
 
-    def step_(self):
-        
-        
-        # for n, p in self.net.named_parameters():
-        #     if p.requires_grad == True: 
-        #         print(n)
-        #         p.data = p.data - self.lr * p.grad.data.view(-1).view(p.data.shape)
-                
-        
-        # print('update done')
-        # return
-        
-        
-        
-        q_A_grad, q_B_grad, v_A_grad, v_B_grad, cls_grad_w, cls_grad_b = self.score_func()
-        
-        # print(q_A_grad.shape, q_B_grad.shape, v_A_grad.shape, v_B_grad.shape)
-        
-        
-        updated_n = []
-        
-        for net_id in range(self.num_particles):
-            for layer_id in range(12):   
-                for n, p in self.net.lora_vit.named_parameters():
-                    
-                    if p.requires_grad and n not in updated_n: 
-                    
-                        if f'blocks.{str(layer_id)}' in n:
-                            # print('B-name', n)
-                            if "proj_q" in n:
-                                if f"w_a.layer.{net_id}" in n:
-                                    # print(n)
-                                    updated_n.append(n)
-                                    temp_w = p.data
-                                    p.data = temp_w + self.lr * q_A_grad[layer_id][net_id].view(p.data.shape)
-                                elif f"w_b.layer.{net_id}" in n:
-                                    # print(n)
-                                    updated_n.append(n)
-                                    temp_w = p.data
-                                    p.data = temp_w + self.lr * q_B_grad[layer_id][net_id].view(p.data.shape)
-                            elif "proj_v" in n:
-                                if f"w_a.layer.{net_id}" in n:
-                                    # print(n)
-                                    updated_n.append(n)
-                                    temp_w = p.data
-                                    p.data = temp_w + self.lr * v_A_grad[layer_id][net_id].view(p.data.shape)
-                                elif f"w_b.layer.{net_id}" in n:
-                                    # print(n)
-                                    updated_n.append(n)
-                                    temp_w = p.data
-                                    p.data = temp_w + self.lr * v_B_grad[layer_id][net_id].view(p.data.shape)
-                                    
-                        elif 'fc' in n:
-                            if 'weight' in n:
-                                if f"layer.{net_id}" in n:
-                                    # print(n)
-                                    updated_n.append(n)
-                                    temp_w = p.data
-                                    p.data = temp_w + self.lr * cls_grad_w[layer_id][net_id].view(p.data.shape)
-                            elif 'bias' in n and f"layer.{net_id}" in n:
-                                    # print(n)
-                                    updated_n.append(n)
-                                    temp_w = p.data
-                                    p.data = temp_w + self.lr * cls_grad_b[layer_id][net_id].view(p.data.shape)
-        
-        # try:                        
-        #     temp_w = self.net.lora_vit.fc.weight.data
-        #     temp_b = self.net.lora_vit.fc.bias.data
-        # except:
-        #     temp_w = self.net.fc.weight.data
-        #     temp_b = self.net.fc.bias.data
-        
-        # try:
-        #     self.net.lora_vit.fc.weight.data =  temp_w - self.lr * cls_grad_w
-        #     self.net.lora_vit.fc.bias.data =  temp_b - self.lr * cls_grad_b
-        # except:
-        #     self.net.fc.weight.data =  temp_w - self.lr * cls_grad_w
-        #     self.net.fc.bias.data =  temp_b - self.lr * cls_grad_b
-            
-        # exit()
-                                
-        
+
+    @torch.no_grad()
+    def step(self, closure=None):
+        assert closure is not None, "Sharpness Aware Minimization requires closure, but it was not provided"
+        closure = torch.enable_grad()(closure)  # the closure should do a full forward-backward pass
+
+        self.first_step(zero_grad=True)
+        closure()
+        self.second_step()
+
+
+    def load_state_dict(self, state_dict):
+        super().load_state_dict(state_dict)
+        self.base_optimizer.param_groups = self.param_groups

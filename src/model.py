@@ -379,11 +379,17 @@ class ClassificationModel(pl.LightningModule):
             # exit()
             if self.use_sam:
                 
-                org_weight_tuple, kernel_tuple = opt.step1()
+                # org_weight_tuple, kernel_tuple = opt.step1()
+                # loss = self.shared_step(batch, "train")
+                # opt.zero_grad()
+                # self.manual_backward(loss)
+                # opt.step2(org_weight_tuple, kernel_tuple)
+
+                opt.step1(zero_grad= True)
                 loss = self.shared_step(batch, "train")
-                opt.zero_grad()
+
                 self.manual_backward(loss)
-                opt.step2(org_weight_tuple, kernel_tuple)
+                opt.step2(zero_grad= True)
             else:
                 opt.step_()
             opt.zero_grad()
@@ -392,6 +398,8 @@ class ClassificationModel(pl.LightningModule):
         else:
             self.log("lr", self.trainer.optimizers[0].param_groups[0]["lr"], prog_bar=True)
             return self.shared_step(batch, "train")
+
+
 
     def validation_step(self, batch, _):
         val = self.shared_step(batch, "val")
@@ -442,8 +450,10 @@ class ClassificationModel(pl.LightningModule):
                 momentum=self.momentum,
                 weight_decay=self.weight_decay,
             )
-        elif self.optimizer == "svgd":  #use Adam as the base optimizer by default @@        
-            optimizer =  SVGD(param = self.net.parameters(), lr=self.lr, betas=self.betas,
+        elif self.optimizer == "svgd":  #use Adam as the base optimizer by default @@    
+            base_optimizer = torch.optim.SGD
+
+            optimizer =  SVGD(param = self.net.parameters(),base_optimizer= base_optimizer, lr=self.lr, betas=self.betas,
                 weight_decay=self.weight_decay, num_particles=self.num_particles, train_module=self, net=self.net)
         else:
             raise ValueError(
