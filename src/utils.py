@@ -5,7 +5,7 @@ import torch
 import torch.autograd as autograd
 import torch.optim as optim
 from scipy.spatial.distance import pdist, squareform
-
+import random
 def block_expansion(ckpt, split, original_layers):
 
     layer_cnt = 0
@@ -66,10 +66,10 @@ class RBF(torch.nn.Module):
     return K_XY
   
 class SVGD(torch.optim.Adam):
-    def __init__(self, param, base_optimizer, lr=0, betas=(0.9, 0.999), weight_decay=0, num_particles=0, train_module=0, net=None, rho=0.05, adaptive=False, **kwargs):
+    def __init__(self, param, base_optimizer, lr=0, betas=(0.9, 0.999), weight_decay=0, num_particles=0, train_module=0, net=None, rho=0.05, adaptive=False,lamda= 1, **kwargs):
 
         # Base optimizer arguments
-        defaults = dict(lr=lr, betas=betas, weight_decay=weight_decay, num_particles=num_particles, train_module=train_module, net=net, rho=rho, adaptive=adaptive, **kwargs)
+        defaults = dict(lr=lr, betas=betas, weight_decay=weight_decay, num_particles=num_particles, train_module=train_module, net=net, rho=rho, adaptive=adaptive, lamda=1, **kwargs)
         
         # Initialize the base optimizer (Adam)
         super(SVGD, self).__init__(param, lr=lr, betas=betas, weight_decay=weight_decay)  # Pass individual arguments
@@ -81,6 +81,7 @@ class SVGD(torch.optim.Adam):
 
         self.rho = rho
         self.adaptive = adaptive
+        self.lamda = lamda
 
         # Initialize base optimizer
         self.base_optimizer = base_optimizer(self.param_groups, **kwargs)
@@ -285,6 +286,8 @@ class SVGD(torch.optim.Adam):
         for net_id in range(self.num_particles):
             for layer_id in range(12):  # Assuming 12 layers
                 for n, p in self.net.lora_vit.named_parameters():
+
+
                     if p.requires_grad and n not in updated_n:
 
 
@@ -296,31 +299,55 @@ class SVGD(torch.optim.Adam):
                                     self.state[p]['old_p'] = p.data.clone()
                                     perturb = self.rho * q_A_grad[layer_id][net_id] / (q_A_grad[layer_id][net_id].norm() + 1e-12)
                                     p.add_(perturb.view(p.data.shape))  # Apply perturbation
+
+                                    e_w = ( p.grad - 2 * self.lamda * (p - self.state[p]["old_p"]) ) # e_w =  grad(theta') - 2 * lambda * (theta' - theta) 
+                                    p.add_(e_w)
+                                    
                                 elif f"w_b.layer.{net_id}" in n:
                                     self.state[p]['old_p'] = p.data.clone()
                                     perturb = self.rho * q_B_grad[layer_id][net_id] / (q_B_grad[layer_id][net_id].norm() + 1e-12)
                                     p.add_(perturb.view(p.data.shape))  # Apply perturbation
+
+                                    e_w = ( p.grad - 2 * self.lamda * (p - self.state[p]["old_p"]) ) # e_w =  grad(theta') - 2 * lambda * (theta' - theta) 
+                                    p.add_(e_w)
+
                             elif "proj_v" in n:
                                 if f"w_a.layer.{net_id}" in n:
                                     self.state[p]['old_p'] = p.data.clone()
                                     perturb = self.rho * v_A_grad[layer_id][net_id] / (v_A_grad[layer_id][net_id].norm() + 1e-12)
                                     p.add_(perturb.view(p.data.shape))  # Apply perturbation
+
+                                    e_w = ( p.grad - 2 * self.lamda * (p - self.state[p]["old_p"]) ) # e_w =  grad(theta') - 2 * lambda * (theta' - theta) 
+                                    p.add_(e_w)
+
                                 elif f"w_b.layer.{net_id}" in n:
                                     self.state[p]['old_p'] = p.data.clone()
                                     perturb = self.rho * v_B_grad[layer_id][net_id] / (v_B_grad[layer_id][net_id].norm() + 1e-12)
                                     p.add_(perturb.view(p.data.shape))  # Apply perturbation
+
+                                    e_w = ( p.grad - 2 * self.lamda * (p - self.state[p]["old_p"]) ) # e_w =  grad(theta') - 2 * lambda * (theta' - theta) 
+                                    p.add_(e_w)
+
                         elif 'fc' in n:
                             if 'weight' in n:
                                 self.state[p]['old_p'] = p.data.clone()
                                 perturb = self.rho * clsW_grad[layer_id][net_id] / (clsW_grad[layer_id][net_id].norm() + 1e-12)
                                 p.add_(perturb.view(p.data.shape))  # Apply perturbation
+
+                                e_w = ( p.grad - 2 * self.lamda * (p - self.state[p]["old_p"]) ) # e_w =  grad(theta') - 2 * lambda * (theta' - theta) 
+                                p.add_(e_w)
+
                             elif 'bias' in n:
                                 self.state[p]['old_p'] = p.data.clone()
                                 perturb = self.rho * clsB_grad[layer_id][net_id] / (clsB_grad[layer_id][net_id].norm() + 1e-12)
                                 p.add_(perturb.view(p.data.shape))  # Apply perturbation
                         
+                                e_w = ( p.grad - 2 * self.lamda * (p - self.state[p]["old_p"]) ) # e_w =  grad(theta') - 2 * lambda * (theta' - theta) 
+                                p.add_(e_w)
                         # Mark this parameter as updated
                         updated_n.add(n)
+
+                    
 
         if zero_grad:
             self.zero_grad()
@@ -328,9 +355,10 @@ class SVGD(torch.optim.Adam):
     @torch.no_grad()
     def step2(self, zero_grad=False):
         """Second step: Restore original parameters and apply the gradient update."""
-        
+        lr = self.param_groups[0]['lr']
         # Restore the original parameters
         updated_n = set()  # Track which parameters have been restored
+        curr_dist = False
 
         for net_id in range(self.num_particles):
             for layer_id in range(12):  # Assuming 12 layers
@@ -342,22 +370,74 @@ class SVGD(torch.optim.Adam):
                             if "proj_q" in n:
                                 if f"w_a.layer.{net_id}" in n:
                                     p.data = self.state[p]['old_p']
+
+                                    curr_dist = torch.dist( p, self.state[p]["old_p"] ,p= 2)
+                                    lamda_ew =  (self.rho - curr_dist )
+                                    lamda_ew = lamda_ew.detach()
+                                    self.lamda = self.lamda - lr * lamda_ew
+
+
                                 elif f"w_b.layer.{net_id}" in n:
                                     p.data = self.state[p]['old_p']
+
+                                    curr_dist = torch.dist( p, self.state[p]["old_p"] ,p= 2)
+                                    lamda_ew =  (self.rho - curr_dist )
+                                    lamda_ew = lamda_ew.detach()
+                                    self.lamda = self.lamda - lr * lamda_ew
+
+
                             elif "proj_v" in n:
                                 if f"w_a.layer.{net_id}" in n:
                                     p.data = self.state[p]['old_p']
+
+                                    curr_dist = torch.dist( p, self.state[p]["old_p"] ,p= 2)
+                                    lamda_ew =  (self.rho - curr_dist )
+                                    lamda_ew = lamda_ew.detach()
+                                    self.lamda = self.lamda - lr * lamda_ew
+
+
                                 elif f"w_b.layer.{net_id}" in n:
                                     p.data = self.state[p]['old_p']
+
+                                    curr_dist = torch.dist( p, self.state[p]["old_p"] ,p= 2)
+                                    lamda_ew =  (self.rho - curr_dist )
+                                    lamda_ew = lamda_ew.detach()
+                                    self.lamda = self.lamda - lr * lamda_ew
+
+
                         elif 'fc' in n:
                             if 'weight' in n:
                                 p.data = self.state[p]['old_p']
+
+                                curr_dist = torch.dist( p, self.state[p]["old_p"] ,p= 2)
+                                lamda_ew =  (self.rho - curr_dist )
+                                lamda_ew = lamda_ew.detach()
+                                self.lamda = self.lamda - lr * lamda_ew
+
+
                             elif 'bias' in n:
                                 p.data = self.state[p]['old_p']
+                                
+                                curr_dist = torch.dist( p, self.state[p]["old_p"] ,p= 2)
+                                lamda_ew =  (self.rho - curr_dist )
+                                lamda_ew = lamda_ew.detach()
+                                self.lamda = self.lamda - lr * lamda_ew
+
+
                         # Mark this parameter as updated
                         updated_n.add(n)
+                    
+                    
+                    ### DEBUG
+                    a = random.randint(0, 10000)
+                    if a == 2306 :
+                        print("Current lamda:", self.lamda)
+                        print("Current distance:", curr_dist)
+                        print("Current LR: ", lr)
 
-        self. base_optimizer.step()
+                    ### DEBUG
+
+        self.base_optimizer.step()
 
         if zero_grad:
             self.zero_grad()
