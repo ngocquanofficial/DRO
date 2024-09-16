@@ -66,7 +66,7 @@ class RBF(torch.nn.Module):
     return K_XY
   
 class SVGD(torch.optim.Adam):
-    def __init__(self, param, base_optimizer, lr=0, betas=(0.9, 0.999), weight_decay=0, num_particles=0, train_module=0, net=None, rho=0.05, adaptive=False,lamda= 1, **kwargs):
+    def __init__(self, param, base_optimizer, lr=0, betas=(0.9, 0.999), weight_decay=0, num_particles=0, train_module=0, net=None, rho=0.1, adaptive=False,lamda= 1, **kwargs):
 
         # Base optimizer arguments
         defaults = dict(lr=lr, betas=betas, weight_decay=weight_decay, num_particles=num_particles, train_module=train_module, net=net, rho=rho, adaptive=adaptive, lamda=1, **kwargs)
@@ -81,273 +81,56 @@ class SVGD(torch.optim.Adam):
 
         self.rho = rho
         self.adaptive = adaptive
-        self.lamda = lamda
 
         # Initialize base optimizer
         self.base_optimizer = base_optimizer(self.param_groups, **kwargs)
         self.param_groups = self.base_optimizer.param_groups
         self.defaults.update(self.base_optimizer.defaults)
         
-        
-    def get_learnable_block(self): #for LoRA        
-        q_A = torch.empty(0).cuda()
-        q_B = torch.empty(0).cuda()
-        v_A = torch.empty(0).cuda()
-        v_B = torch.empty(0).cuda()
-        cls_w = torch.empty(0).cuda()
-        cls_b = torch.empty(0).cuda()
-        tq_A = torch.empty(0).cuda()
-        tq_B = torch.empty(0).cuda()
-        tv_A = torch.empty(0).cuda()
-        tv_B = torch.empty(0).cuda()
-        tcls_w = torch.empty(0).cuda()
-        tcls_b = torch.empty(0).cuda()
-        i_qA = 0
-        i_qB = 0
-        i_vA = 0
-        i_vB = 0
-        i_cls_w = 0
-        i_cls_b = 0
-        # print('Get learnable params')
-        for n, p in self.net.named_parameters():
-            if p.requires_grad:
-                if "proj_q" in n:
-                    if "w_a" in n:
-                        if i_qA < self.num_particles:
-                            p_ = p.data.view(1, 1, -1)
-                            tq_A = torch.cat((tq_A, p_), dim=1)
-                            i_qA += 1
-                            if i_qA == self.num_particles:   
-                                # print(q_A.shape, tq_A.shape)
-                                q_A = torch.cat((q_A, tq_A), dim=0)
-                                tq_A = torch.empty(0).cuda()
-                                i_qA = 0
-                    elif "w_b" in n:
-                        if i_qB < self.num_particles:
-                            p_ = p.data.view(1, 1, -1)
-                            tq_B = torch.cat((tq_B, p_), dim=1)
-                            i_qB += 1
-                            if i_qB == self.num_particles:   
-                                # print(q_A.shape, tq_A.shape)
-                                q_B = torch.cat((q_B, tq_B), dim=0)
-                                tq_B = torch.empty(0).cuda()
-                                i_qB = 0
-                elif "proj_v" in n:
-                    if "w_a" in n:
-                        if i_vA < self.num_particles:
-                            p_ = p.data.view(1, 1, -1)
-                            tv_A = torch.cat((tv_A, p_), dim=1)
-                            i_vA += 1
-                            if i_vA == self.num_particles:   
-                                # print(q_A.shape, tq_A.shape)
-                                v_A = torch.cat((v_A, tv_A), dim=0)
-                                tv_A = torch.empty(0).cuda()
-                                i_vA = 0
-                    elif "w_b" in n:
-                        if i_vB < self.num_particles:
-                            p_ = p.data.view(1, 1, -1)
-                            tv_B = torch.cat((tv_B, p_), dim=1)
-                            i_vB += 1
-                            if i_vB == self.num_particles:   
-                                # print(q_A.shape, tq_A.shape)
-                                v_B = torch.cat((v_B, tv_B), dim=0)
-                                tv_B = torch.empty(0).cuda()
-                                i_vB = 0                 
-                elif "fc" in n:
-                    if "weight" in n:
-                        if i_cls_w < self.num_particles:
-                            p_ = p.data.view(1, 1, -1)
-                            tcls_w = torch.cat((tcls_w, p_), dim=1)
-                            i_cls_w += 1
-                            if i_cls_w == self.num_particles:   
-                                # print(q_A.shape, tq_A.shape)
-                                cls_w = torch.cat((cls_w, tcls_w), dim=0)
-                                tcls_w = torch.empty(0).cuda()
-                                i_cls_w = 0
-                    elif "bias" in n:
-                        if i_cls_b < self.num_particles:
-                            p_ = p.data.view(1, 1, -1)
-                            tcls_b = torch.cat((tcls_b, p_), dim=1)
-                            i_cls_b += 1
-                            if i_cls_b == self.num_particles:   
-                                # print(q_A.shape, tq_A.shape)
-                                cls_b = torch.cat((cls_b, tcls_b), dim=0)
-                                tcls_b = torch.empty(0).cuda()
-                                i_cls_b = 0
-                            
-        return q_A, q_B, v_A, v_B, cls_w, cls_b
-    
-    def get_grad1(self): #for LoRA
-        
-        q_A = torch.empty(0).cuda()
-        q_B = torch.empty(0).cuda()
-        v_A = torch.empty(0).cuda()
-        v_B = torch.empty(0).cuda()
-        cls_w = torch.empty(0).cuda()
-        cls_b = torch.empty(0).cuda()
-        tq_A = torch.empty(0).cuda()
-        tq_B = torch.empty(0).cuda()
-        tv_A = torch.empty(0).cuda()
-        tv_B = torch.empty(0).cuda()
-        tcls_w = torch.empty(0).cuda()
-        tcls_b = torch.empty(0).cuda()
-        i_qA = 0
-        i_qB = 0
-        i_vA = 0
-        i_vB = 0
-        i_cls_w = 0
-        i_cls_b = 0
-        for n, p in self.net.named_parameters():
-            if p.requires_grad:
-                if "proj_q" in n:
-                    if "w_a" in n:
-                        if i_qA < self.num_particles:
-                            p_ = p.grad.data.view(1, 1, -1)
-                            tq_A = torch.cat((tq_A, p_), dim=1)
-                            i_qA += 1
-                            if i_qA == self.num_particles:   
-                                q_A = torch.cat((q_A, tq_A), dim=0)
-                                tq_A = torch.empty(0).cuda()
-                                i_qA = 0
-                    elif "w_b" in n:
-                        if i_qB < self.num_particles:
-                            p_ = p.grad.data.view(1, 1, -1)
-                            tq_B = torch.cat((tq_B, p_), dim=1)
-                            i_qB += 1
-                            if i_qB == self.num_particles:   
-                                # print(q_A.shape, tq_A.shape)
-                                q_B = torch.cat((q_B, tq_B), dim=0)
-                                tq_B = torch.empty(0).cuda()
-                                i_qB = 0
-                elif "proj_v" in n:
-                    if "w_a" in n:
-                        if i_vA < self.num_particles:
-                            p_ = p.grad.data.view(1, 1, -1)
-                            tv_A = torch.cat((tv_A, p_), dim=1)
-                            i_vA += 1
-                            if i_vA == self.num_particles:   
-                                # print(q_A.shape, tq_A.shape)
-                                v_A = torch.cat((v_A, tv_A), dim=0)
-                                tv_A = torch.empty(0).cuda()
-                                i_vA = 0
-                    elif "w_b" in n:
-                        if i_vB < self.num_particles:
-                            p_ = p.grad.data.view(1, 1, -1)
-                            tv_B = torch.cat((tv_B, p_), dim=1)
-                            i_vB += 1
-                            if i_vB == self.num_particles:   
-                                # print(q_A.shape, tq_A.shape)
-                                v_B = torch.cat((v_B, tv_B), dim=0)
-                                tv_B = torch.empty(0).cuda()
-                                i_vB = 0
-                                
-                elif 'fc' in n:
-                    if 'weight' in n:
-                        if i_cls_w < self.num_particles:
-                            p_ = p.grad.data.view(1, 1, -1)
-                            tcls_w = torch.cat((tcls_w, p_), dim=1)
-                            i_cls_w += 1
-                            if i_cls_w == self.num_particles:   
-                                cls_w = torch.cat((cls_w, tcls_w), dim=0)
-                                tcls_w = torch.empty(0).cuda()
-                                i_cls_w = 0
-                    elif 'bias' in n:
-                        if i_cls_b < self.num_particles:
-                            p_ = p.grad.data.view(1, 1, -1)
-                            tcls_b = torch.cat((tcls_b, p_), dim=1)
-                            i_cls_b += 1
-                            if i_cls_b == self.num_particles:   
-                                cls_b = torch.cat((cls_b, tcls_b), dim=0)
-                                tcls_b = torch.empty(0).cuda()
-                                i_cls_b = 0
-                    
-                            
-        # print('q_A_grad', q_A.shape, q_A)
-        # print('q_B_grad', q_B.shape, q_B)
-        # print('v_A_grad', v_A.shape, v_A)
-        # print('v_B_grad', v_B.shape, v_B)
-        # print('cls_w', cls_w.shape)
-        # print('cls_b', cls_b.shape)
-        # exit()
-                    
-        return q_A, q_B, v_A, v_B, cls_w, cls_b
+        self.momentum = betas[0]
+        self.grad_loop = 1
+        # Init velocity and lamda
+
+        for n, p in self.net.lora_vit.named_parameters():
+
+            if p.requires_grad :
+                self.state[p]['velocity'] = torch.zeros_like(p.data)
+                self.state[p]['lamda'] = lamda
+
 
 
     @torch.no_grad()
     def step1(self, zero_grad=False):
         """First step: Perturb particle-specific parameters using SAM logic and save the original parameters."""
         
-        # Get the particle-specific gradients for all LoRA layers
-        q_A_grad, q_B_grad, v_A_grad, v_B_grad, clsW_grad, clsB_grad = self.get_grad1()
+        lr = self.param_groups[0]['lr']
 
         # Create a set to keep track of the updated parameters
-        updated_n = set()
 
-        for net_id in range(self.num_particles):
-            for layer_id in range(12):  # Assuming 12 layers
-                for n, p in self.net.lora_vit.named_parameters():
+        for n, p in self.net.lora_vit.named_parameters():
 
 
-                    if p.requires_grad and n not in updated_n:
+            if p.requires_grad :
+
+                # Save the original parameters for each particle and layer
+                self.state[p]['old_p'] = p.data.clone()
+                perturb = self.state[p]['velocity'] * lr
+                p.add_(perturb.view(p.data.shape))  # Apply perturbation
 
 
-                        # Perturb the specific gradients for each particle and layer
-                        if f'blocks.{str(layer_id)}' in n:
-                            if "proj_q" in n:
-                                if f"w_a.layer.{net_id}" in n:
-                                    # Save the original parameters for each particle and layer
-                                    self.state[p]['old_p'] = p.data.clone()
-                                    perturb = self.rho * q_A_grad[layer_id][net_id] / (q_A_grad[layer_id][net_id].norm() + 1e-12)
-                                    p.add_(perturb.view(p.data.shape))  # Apply perturbation
+                for _ in range(self.grad_loop) : 
+                    e_w = ( p.grad - 2 * self.state[p]['lamda'] * (p - self.state[p]["old_p"]) ) * lr
+                    p.add_(e_w.view(p.data.shape))
 
-                                    e_w = ( p.grad - 2 * self.lamda * (p - self.state[p]["old_p"]) ) # e_w =  grad(theta') - 2 * lambda * (theta' - theta) 
-                                    p.add_(e_w)
-                                    
-                                elif f"w_b.layer.{net_id}" in n:
-                                    self.state[p]['old_p'] = p.data.clone()
-                                    perturb = self.rho * q_B_grad[layer_id][net_id] / (q_B_grad[layer_id][net_id].norm() + 1e-12)
-                                    p.add_(perturb.view(p.data.shape))  # Apply perturbation
 
-                                    e_w = ( p.grad - 2 * self.lamda * (p - self.state[p]["old_p"]) ) # e_w =  grad(theta') - 2 * lambda * (theta' - theta) 
-                                    p.add_(e_w)
 
-                            elif "proj_v" in n:
-                                if f"w_a.layer.{net_id}" in n:
-                                    self.state[p]['old_p'] = p.data.clone()
-                                    perturb = self.rho * v_A_grad[layer_id][net_id] / (v_A_grad[layer_id][net_id].norm() + 1e-12)
-                                    p.add_(perturb.view(p.data.shape))  # Apply perturbation
+                # Update velocity, notice that p now is theta prime, NOT theta
+                self.state[p]['velocity'].mul_(self.momentum).add_( (1 - self.momentum) * p.grad.data )
 
-                                    e_w = ( p.grad - 2 * self.lamda * (p - self.state[p]["old_p"]) ) # e_w =  grad(theta') - 2 * lambda * (theta' - theta) 
-                                    p.add_(e_w)
 
-                                elif f"w_b.layer.{net_id}" in n:
-                                    self.state[p]['old_p'] = p.data.clone()
-                                    perturb = self.rho * v_B_grad[layer_id][net_id] / (v_B_grad[layer_id][net_id].norm() + 1e-12)
-                                    p.add_(perturb.view(p.data.shape))  # Apply perturbation
+                
 
-                                    e_w = ( p.grad - 2 * self.lamda * (p - self.state[p]["old_p"]) ) # e_w =  grad(theta') - 2 * lambda * (theta' - theta) 
-                                    p.add_(e_w)
 
-                        elif 'fc' in n:
-                            if 'weight' in n:
-                                self.state[p]['old_p'] = p.data.clone()
-                                perturb = self.rho * clsW_grad[layer_id][net_id] / (clsW_grad[layer_id][net_id].norm() + 1e-12)
-                                p.add_(perturb.view(p.data.shape))  # Apply perturbation
-
-                                e_w = ( p.grad - 2 * self.lamda * (p - self.state[p]["old_p"]) ) # e_w =  grad(theta') - 2 * lambda * (theta' - theta) 
-                                p.add_(e_w)
-
-                            elif 'bias' in n:
-                                self.state[p]['old_p'] = p.data.clone()
-                                perturb = self.rho * clsB_grad[layer_id][net_id] / (clsB_grad[layer_id][net_id].norm() + 1e-12)
-                                p.add_(perturb.view(p.data.shape))  # Apply perturbation
-                        
-                                e_w = ( p.grad - 2 * self.lamda * (p - self.state[p]["old_p"]) ) # e_w =  grad(theta') - 2 * lambda * (theta' - theta) 
-                                p.add_(e_w)
-                        # Mark this parameter as updated
-                        updated_n.add(n)
-
-                    
 
         if zero_grad:
             self.zero_grad()
@@ -356,88 +139,28 @@ class SVGD(torch.optim.Adam):
     def step2(self, zero_grad=False):
         """Second step: Restore original parameters and apply the gradient update."""
         lr = self.param_groups[0]['lr']
-        # Restore the original parameters
-        updated_n = set()  # Track which parameters have been restored
-        curr_dist = False
-
-        for net_id in range(self.num_particles):
-            for layer_id in range(12):  # Assuming 12 layers
-                for n, p in self.net.lora_vit.named_parameters():
-                    if p.requires_grad and n not in updated_n:
-                        # Restore the original parameters for each particle and layer
-
-                        if f'blocks.{str(layer_id)}' in n:
-                            if "proj_q" in n:
-                                if f"w_a.layer.{net_id}" in n:
-                                    p.data = self.state[p]['old_p']
-
-                                    curr_dist = torch.dist( p, self.state[p]["old_p"] ,p= 2)
-                                    lamda_ew =  (self.rho - curr_dist )
-                                    lamda_ew = lamda_ew.detach()
-                                    self.lamda = self.lamda - lr * lamda_ew
 
 
-                                elif f"w_b.layer.{net_id}" in n:
-                                    p.data = self.state[p]['old_p']
+        for n, p in self.net.lora_vit.named_parameters():
+            if p.requires_grad: # and n not in updated_n:
 
-                                    curr_dist = torch.dist( p, self.state[p]["old_p"] ,p= 2)
-                                    lamda_ew =  (self.rho - curr_dist )
-                                    lamda_ew = lamda_ew.detach()
-                                    self.lamda = self.lamda - lr * lamda_ew
+                curr_dist = torch.dist( p, self.state[p]["old_p"] ,p= 2)
+                lamda_ew =  (self.rho - curr_dist )
+                self.state[p]['lamda'] = self.state[p]['lamda'] - lamda_ew * lr
 
+                p.data = self.state[p]['old_p']
 
-                            elif "proj_v" in n:
-                                if f"w_a.layer.{net_id}" in n:
-                                    p.data = self.state[p]['old_p']
+                print()
+                print("Current lamda:", self.state[p]['lamda'])
+                print("Current distance:", curr_dist)
+                print("Current lamda_ew: ", lamda_ew)
+                print()
 
-                                    curr_dist = torch.dist( p, self.state[p]["old_p"] ,p= 2)
-                                    lamda_ew =  (self.rho - curr_dist )
-                                    lamda_ew = lamda_ew.detach()
-                                    self.lamda = self.lamda - lr * lamda_ew
-
-
-                                elif f"w_b.layer.{net_id}" in n:
-                                    p.data = self.state[p]['old_p']
-
-                                    curr_dist = torch.dist( p, self.state[p]["old_p"] ,p= 2)
-                                    lamda_ew =  (self.rho - curr_dist )
-                                    lamda_ew = lamda_ew.detach()
-                                    self.lamda = self.lamda - lr * lamda_ew
-
-
-                        elif 'fc' in n:
-                            if 'weight' in n:
-                                p.data = self.state[p]['old_p']
-
-                                curr_dist = torch.dist( p, self.state[p]["old_p"] ,p= 2)
-                                lamda_ew =  (self.rho - curr_dist )
-                                lamda_ew = lamda_ew.detach()
-                                self.lamda = self.lamda - lr * lamda_ew
-
-
-                            elif 'bias' in n:
-                                p.data = self.state[p]['old_p']
-                                
-                                curr_dist = torch.dist( p, self.state[p]["old_p"] ,p= 2)
-                                lamda_ew =  (self.rho - curr_dist )
-                                lamda_ew = lamda_ew.detach()
-                                self.lamda = self.lamda - lr * lamda_ew
-
-
-                        # Mark this parameter as updated
-                        updated_n.add(n)
-                    
-                    
-                    ### DEBUG
-                    a = random.randint(0, 10000)
-                    if a == 2306 :
-                        print("Current lamda:", self.lamda)
-                        print("Current distance:", curr_dist)
-                        print("Current LR: ", lr)
-
-                    ### DEBUG
+                
 
         self.base_optimizer.step()
+
+
 
         if zero_grad:
             self.zero_grad()
