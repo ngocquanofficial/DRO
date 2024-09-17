@@ -373,10 +373,6 @@ class ClassificationModel(pl.LightningModule):
             opt.zero_grad()
             self.manual_backward(loss)
 
-
-            # for sam
-            # print(self.use_sam)
-            # exit()
             if self.use_sam:
                 
                 # org_weight_tuple, kernel_tuple = opt.step1()
@@ -390,8 +386,10 @@ class ClassificationModel(pl.LightningModule):
 
                 self.manual_backward(loss)
                 opt.step2(zero_grad= True)
-            else:
-                opt.step_()
+
+            # else:
+            #     print("MISSING OPTIMIZER")
+            #     return
             opt.zero_grad()
             scheduler.step()
             # return loss
