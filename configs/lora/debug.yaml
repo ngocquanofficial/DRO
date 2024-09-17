@@ -26,7 +26,7 @@ data:
   dataset: cifar100
   root: cifar100
   size: 224
-  batch_size: 16
+  batch_size: 64
   workers: 4
 model_checkpoint:
   filename: best-step-{step}-{val_acc:.4f}

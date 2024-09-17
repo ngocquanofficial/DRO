@@ -88,7 +88,7 @@ class SVGD(torch.optim.Adam):
         self.defaults.update(self.base_optimizer.defaults)
         
         self.momentum = betas[0]
-        self.grad_loop = 1
+        self.grad_loop = 3
         # Init velocity and lamda
 
         for n, p in self.net.lora_vit.named_parameters():
@@ -114,14 +114,18 @@ class SVGD(torch.optim.Adam):
 
                 # Save the original parameters for each particle and layer
                 self.state[p]['old_p'] = p.data.clone()
-                perturb = self.state[p]['velocity'] * lr
+
+                perturb = ( self.state[p]['velocity'] / (self.state[p]['velocity'].norm() + 1e-12) ) * (self.rho / 2)
                 p.add_(perturb.view(p.data.shape))  # Apply perturbation
 
 
                 for _ in range(self.grad_loop) : 
-                    e_w = ( p.grad - 2 * self.state[p]['lamda'] * (p - self.state[p]["old_p"]) ) * lr
-                    p.add_(e_w.view(p.data.shape))
+                    e_w = p.grad - 2 * self.state[p]['lamda'] * (p - self.state[p]["old_p"])  
 
+                    # Normalize and rescale to make sure that norm(e_w) = rho/2
+                    e_w = e_w / (e_w.norm() + 1e-12 ) * (self.rho / 2)
+                    p.add_(e_w.view(p.data.shape))
+                    # print("Very CURRENT DIST: ", torch.dist( p, self.state[p]["old_p"] ,p= 2))
 
 
                 # Update velocity, notice that p now is theta prime, NOT theta
@@ -150,11 +154,11 @@ class SVGD(torch.optim.Adam):
 
                 p.data = self.state[p]['old_p']
 
-                print()
-                print("Current lamda:", self.state[p]['lamda'])
-                print("Current distance:", curr_dist)
-                print("Current lamda_ew: ", lamda_ew)
-                print()
+                # print()
+                # print("Current lamda:", self.state[p]['lamda'])
+                # print("Current distance:", curr_dist)
+                # print("Current lamda_ew: ", lamda_ew)
+                # print()
 
                 
 
