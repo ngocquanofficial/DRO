@@ -411,10 +411,10 @@ class ClassificationModel(pl.LightningModule):
         # self.test_step(batch, _)
         return val
     
-    def on_validation_epoch_end(self):
-        test_dataloader = self.trainer.datamodule.test_dataloader()
-        for batch in test_dataloader:
-            self.test_step(batch, 0)
+    # def on_validation_epoch_end(self):
+    #     test_dataloader = self.trainer.datamodule.test_dataloader()
+    #     for batch in test_dataloader:
+    #         self.test_step(batch, 0)
 
             
     def test_step(self, batch, _):
