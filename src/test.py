@@ -108,8 +108,10 @@ def cal_cosine_similarity(y_true, pred, num_models):
 y_true = torch.tensor([[0, 0, 0, 1], [1, 0, 0, 0]])
 pred1 = torch.tensor([[1.0,1.0,1.0,1.0], [4.0, 1.0, 0.0, 0.0]])
 pred2 = torch.tensor([[1.0,1.0,0.0,0.0], [4.0, 1.0, 0.0, 0.0]])
-pred3 = torch.tensor([[0.0,0.0,1.0,1.0], [4.0, 0.0, 0.0, 1.0]])
+pred3 = torch.tensor([[0.0,0.0,0.0,1.0], [4.0, 0.0, 0.0, 1.0]])
 
 pred_list = [pred1, pred2, pred3]
 
 print(cal_cosine_similarity(y_true, pred_list, 3))
+
+# print(torch.nn.functional.softmax(pred3, dim= -1))

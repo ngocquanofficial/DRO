@@ -334,13 +334,14 @@ class ClassificationModel(pl.LightningModule):
                 pred_ = pred_ + pred[j]
             pred_ = pred_/max(1, self.num_particles)
             entropy_loss = self.loss_fn(pred_, y)
-            div_loss = - log_det(y, pred, self.num_particles).to(pred[0].device)
+            prob_pred = [torch.nn.functional.softmax(i, dim= -1) for i in pred]
+            div_loss = - log_det(y, prob_pred, self.num_particles).to(pred[0].device)
 
             loss = entropy_loss + div_loss
             
             # Get accuracy
             metrics = getattr(self, f"{mode}_metrics")(pred_, y.argmax(1))
-            avg_cosine, max_cosine, min_cosine = cal_cosine_similarity(y, pred, self.num_particles)
+            avg_cosine, max_cosine, min_cosine = cal_cosine_similarity(y, prob_pred, self.num_particles)
             self.log("DIV_LOSS", div_loss, prog_bar=True)
             self.log("max_cosine", max_cosine, prog_bar=True)
             self.log("min_cosine", min_cosine, prog_bar=True)
