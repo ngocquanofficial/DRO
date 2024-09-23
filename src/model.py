@@ -325,7 +325,8 @@ class ClassificationModel(pl.LightningModule):
         
     def shared_step(self, batch, mode="train"):
         x, y = batch
-
+        if x.device!=self.device:
+            x = x.to(self.device)
         if mode == "train":
             # Only converts targets to one-hot if no label smoothing, mixup or cutmix is set
             x, y = self.mixup(x, y)
