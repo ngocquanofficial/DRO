@@ -347,7 +347,7 @@ class ClassificationModel(pl.LightningModule):
             entropy_loss = self.loss_fn(pred_, y)
             div_loss = - log_det(y, pred, self.num_particles) # normalize det receive value from (0, 1], then log_let receive value from [-~, 0]
 
-            print(div_loss)
+            self.log("div_loss", div_loss.detach().item(), prog_bar=True)
 
             loss = entropy_loss + div_loss
 
