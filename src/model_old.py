@@ -8,10 +8,8 @@ import torch
 import torch.nn.functional as F
 from peft import LoraConfig, get_peft_model
 from torch.optim import SGD, Adam, AdamW
-from .utils import SVGD, RBF, log_det
+from .utils import SVGD, RBF
 from torch.optim.lr_scheduler import LambdaLR
-from torch.optim.swa_utils import AveragedModel, SWALR
-from torch.optim.lr_scheduler import CosineAnnealingLR
 from torchmetrics import MetricCollection
 from torchmetrics.classification.accuracy import Accuracy
 from torchmetrics.classification import MulticlassCalibrationError as CalibrationError
@@ -22,7 +20,7 @@ import timm
 
 from src.loss import SoftTargetCrossEntropy
 from src.mixup import Mixup
-from .utils import block_expansion
+from .utils import block_expansion, log_det
 from .lora import LoRA_ViT
 from .base_vit2 import ViT, CustomLinear, CustomLinear2
 # from .base_vit import ViT, CustomLinear
@@ -56,7 +54,6 @@ class ClassificationModel(pl.LightningModule):
         self,
         model_name: str = "vit-b16-224-in21k",
         optimizer: str = "sgd",
-        rho: float= 0.05,
         lr: float = 1e-2,
         betas: Tuple[float, float] = (0.9, 0.999),
         momentum: float = 0.9,
@@ -113,7 +110,6 @@ class ClassificationModel(pl.LightningModule):
         self.save_hyperparameters()
         self.model_name = model_name
         self.optimizer = optimizer
-        self.rho = rho
         self.lr = lr
         self.betas = betas
         self.momentum = momentum
@@ -160,7 +156,7 @@ class ClassificationModel(pl.LightningModule):
                 image_size=self.image_size,
             )
             
-            if self.optimizer in ['svgd', "deep_ens", 'SWAG', "flat_seeking"]:
+            if self.optimizer == 'svgd':
                 print('Model name', self.model_name)
                 # self.net = ViT(name='B_16_imagenet1k', pretrained=True, num_classes=self.n_classes, image_size=self.image_size, num_particles=self.num_particles)
                 self.net = ViT(name='vit-b16-224-in21k', pretrained=True, num_classes=self.n_classes, image_size=self.image_size, num_particles=self.num_particles, weight_path=weights_path)
@@ -182,6 +178,7 @@ class ClassificationModel(pl.LightningModule):
 
             self.net.load_state_dict(new_state_dict, strict=True)
             
+        # exit()
 
         # Prepare model depending on fine-tuning mode
         if self.training_mode == "linear":
@@ -200,15 +197,31 @@ class ClassificationModel(pl.LightningModule):
                 bias=self.lora_bias,
                 modules_to_save=["classifier"],
             )
-            if self.optimizer not in ['svgd', "deep_ens", 'SWAG', 'flat_seeking']:
+            if self.optimizer != "svgd":
                 self.net = get_peft_model(self.net, config)
             else: #init multiple net @@ corresponding to different particles
                 
-                self.net = LoRA_ViT(num_particles=self.num_particles, vit_model=self.net, r=self.lora_r, alpha=self.lora_alpha, num_classes=self.n_classes)
-                if self.optimizer == 'svgd' and self.use_swa_svgd:
-                    self.swa_model = AveragedModel(self.net)
+                # lets freeze first
+                # for param in self.net.parameters():
+                    # param.requires_grad = False
                     
+                # if True:
+                    # print('Re-init weight for', self.net.fc)
+                    # self.net.fc = torch.nn.Linear(768, self.n_classes) #, num_particles=self.num_particles)
+                    # self.net.fc = CustomLinear2(768, self.n_classes, num_particles=self.num_particles)
+                    # print(self.net.fc.weight.requires_grad)
+                    # print(self.net.fc.bias.requires_grad)
+                    # exit()
+                self.net = LoRA_ViT(num_particles=self.num_particles, vit_model=self.net, r=self.lora_r, alpha=self.lora_alpha, num_classes=self.n_classes)
+                # print(self.net)
 
+                # print('Trainable params')
+                # for name,  param in self.net.named_parameters():
+                #     if param.requires_grad == True:
+                #         print(name)
+                        
+                # exit()
+                
                     
         elif self.training_mode == "block":
             
@@ -254,7 +267,7 @@ class ClassificationModel(pl.LightningModule):
                     task="multiclass",
                     top_k=min(5, self.n_classes),
                 ),
-                # "ece": CalibrationError(num_classes=self.n_classes, norm='l1').to("cpu")
+                # "ece": CalibrationError(num_classes=self.n_classes, norm='l1')
             }
         )
         self.val_metrics = MetricCollection(
@@ -265,7 +278,7 @@ class ClassificationModel(pl.LightningModule):
                     task="multiclass",
                     top_k=min(5, self.n_classes),
                 ),
-                "ece": CalibrationError(num_classes=self.n_classes, norm='l1').to("cpu")
+                # "ece": CalibrationError(num_classes=self.n_classes, norm='l1')
             }
         )
         self.test_metrics = MetricCollection(
@@ -276,7 +289,7 @@ class ClassificationModel(pl.LightningModule):
                     task="multiclass",
                     top_k=min(5, self.n_classes),
                 ),
-                "ece": CalibrationError(num_classes=self.n_classes, norm='l1').to("cpu"),
+                # "ece": CalibrationError(num_classes=self.n_classes, norm='l1'),
                 "stats": StatScores(
                     task="multiclass", average=None, num_classes=self.n_classes
                 ),
@@ -298,11 +311,13 @@ class ClassificationModel(pl.LightningModule):
 
         self.test_metric_outputs = []
         
-        if self.optimizer in ['svgd', 'deep_ens', 'SWAG', 'flat_seeking']:
+        if self.optimizer == 'svgd':
             self.automatic_optimization = False
 
     def forward(self, x):
-        if self.optimizer not in ['svgd', 'deep_ens', 'SWAG', 'flat_seeking']:
+        if x.device!=self.device:
+            x = x.to(self.device)
+        if self.optimizer != "svgd":
             return self.net(x).logits
         else:
             res = self.net(x)
@@ -310,33 +325,34 @@ class ClassificationModel(pl.LightningModule):
         
     def shared_step(self, batch, mode="train"):
         x, y = batch
-        x, y = x.cuda(), y.cuda()
-
+        if x.device!=self.device:
+            x = x.to(self.device)
         if mode == "train":
             # Only converts targets to one-hot if no label smoothing, mixup or cutmix is set
             x, y = self.mixup(x, y)
         else:
             y = F.one_hot(y, num_classes=self.n_classes).float()
 
+        # Pass through network
+        pred = self(x)
+        # print(pred[0].grad_fn)
         
-        if self.optimizer not in ['svgd', 'deep_ens', 'SWAG', 'flat_seeking']:
-            # Pass through network
-
-            pred = self(x)
+        if self.optimizer != "svgd":
             loss = self.loss_fn(pred, y)
             # Get accuracy
             metrics = getattr(self, f"{mode}_metrics")(pred, y.argmax(1))
-
         else:
-            pred = self(x)
             pred_ = 0 #pred
+            # print(len(pred), type(pred), type(pred[0]), pred[0].shape)
             for j in range(self.num_particles):
                 pred_ = pred_ + pred[j]
             pred_ = pred_/max(1, self.num_particles)
             entropy_loss = self.loss_fn(pred_, y)
-            div_loss = log_det(y, pred, self.num_particles).to(pred[0].device)
+            div_loss = log_det(y, pred, self.num_particles).to()
 
             loss = entropy_loss + div_loss
+
+
             
             # Get accuracy
             metrics = getattr(self, f"{mode}_metrics")(pred_, y.argmax(1))
@@ -365,53 +381,41 @@ class ClassificationModel(pl.LightningModule):
             opt.zero_grad()
             self.manual_backward(loss)
 
-            # SAM HERE
-            opt.step1(zero_grad= True)
-            loss = self.shared_step(batch, "train")
+            if self.use_sam:
+                
+                # org_weight_tuple, kernel_tuple = opt.step1()
+                # loss = self.shared_step(batch, "train")
+                # opt.zero_grad()
+                # self.manual_backward(loss)
+                # opt.step2(org_weight_tuple, kernel_tuple)
 
-            self.manual_backward(loss)
-            opt.step2(zero_grad= True)
-                    
+                opt.step1(zero_grad= True)
+                loss = self.shared_step(batch, "train")
 
+                self.manual_backward(loss)
+                opt.step2(zero_grad= True)
+
+            # else:
+            #     print("MISSING OPTIMIZER")
+            #     return
             opt.zero_grad()
-            
-
             scheduler.step()
             # return loss
-
-                
         else:
-            opt = self.optimizers()
-            scheduler = self.lr_schedulers()
-            loss = self.shared_step(batch, "train")
-            
-            opt.zero_grad()
-            self.manual_backward(loss)
-            opt.step()
-            scheduler.step()
-            
             self.log("lr", self.trainer.optimizers[0].param_groups[0]["lr"], prog_bar=True)
-            # return self.shared_step(batch, "train")
+            return self.shared_step(batch, "train")
+
 
     def validation_step(self, batch, _):
-        if self.optimizer == 'SWAG' or self.optimizer == 'flat_seeking':
-            self.swag.sample(0.0)
-            bn_update(batch, self.swag)
-            
-        elif self.optimizer == 'svgd' and self.use_swa_svgd:
-            torch.optim.swa_utils.update_bn(batch, self.swa_model)
         val = self.shared_step(batch, "val")
         # self.test_step(batch, _)
         return val
     
-    def on_validation_epoch_end(self):
-        test_dataloader = self.trainer.datamodule.test_dataloader()
-        for batch in test_dataloader:
-            self.test_step(batch, 0)
+    # def on_validation_epoch_end(self):
+    #     test_dataloader = self.trainer.datamodule.test_dataloader()
+    #     for batch in test_dataloader:
+    #         self.test_step(batch, 0)
 
-    def on_validation_epoch_start(self):
-        # Reset calibration metric at the start of each validation epoch
-        self.val_metrics["ece"].reset()
             
     def test_step(self, batch, _):
         return self.shared_step(batch, "test")
@@ -435,9 +439,6 @@ class ClassificationModel(pl.LightningModule):
         print("Saved per-class results in per-class-acc-test.csv")
 
 
-    def on_test_epoch_start(self):
-        # Reset calibration metric at the start of each validation epoch
-        self.test_metrics["ece"].reset()
 
     def configure_optimizers(self):
         # Initialize optimizer
@@ -455,36 +456,25 @@ class ClassificationModel(pl.LightningModule):
                 betas=self.betas,
                 weight_decay=self.weight_decay,
             )
-        elif self.optimizer in ["sgd", 'deep_ens']:
+        elif self.optimizer == "sgd":
             optimizer = SGD(
                 self.net.parameters(),
                 lr=self.lr,
                 momentum=self.momentum,
                 weight_decay=self.weight_decay,
             )
-        elif self.optimizer == 'SWAG' or self.optimizer == 'flat_seeking' :
-            # print(self.net.parameters())
-            optimizer = SGD(
-                self.net.parameters(),
-                lr=self.lr,
-                momentum=self.momentum,
-                weight_decay=self.weight_decay,
-            )
-        elif self.optimizer == "svgd":  #use Adam as the base optimizer by default @@        
+        elif self.optimizer == "svgd":  #use Adam as the base optimizer by default @@    
             base_optimizer = torch.optim.SGD
 
             optimizer =  SVGD(param = self.net.parameters(),base_optimizer= base_optimizer, lr=self.lr, betas=self.betas,
                 weight_decay=self.weight_decay, num_particles=self.num_particles, train_module=self, net=self.net)
         else:
             raise ValueError(
-                f"{self.optimizer} is not an available optimizer. Should be one of ['adam', 'adamw', 'sgd', 'deepEns']"
+                f"{self.optimizer} is not an available optimizer. Should be one of ['adam', 'adamw', 'sgd']"
             )
 
         # Initialize learning rate scheduler
-        if self.optimizer == 'svgd' and self.use_swa_svgd:
-            scheduler = CosineAnnealingLR(optimizer, T_max=100)
-            self.swa_scheduler = SWALR(optimizer, swa_lr=0.05)
-        elif self.scheduler == "cosine":
+        if self.scheduler == "cosine":
             scheduler = get_cosine_schedule_with_warmup(
                 optimizer,
                 num_training_steps=int(self.trainer.estimated_stepping_batches),
@@ -492,7 +482,6 @@ class ClassificationModel(pl.LightningModule):
             )
         elif self.scheduler == "none":
             scheduler = LambdaLR(optimizer, lambda _: 1)
-            
         else:
             raise ValueError(
                 f"{self.scheduler} is not an available optimizer. Should be one of ['cosine', 'none']"

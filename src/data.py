@@ -6,6 +6,7 @@ import torch.utils.data as data
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 from torchvision import transforms
+
 from torchvision.datasets import (
     CIFAR10,
     CIFAR100,
@@ -17,6 +18,10 @@ from torchvision.datasets import (
     ImageFolder,
     OxfordIIITPet,
     StanfordCars,
+    Caltech101,
+    SVHN,
+    SUN397,
+    EuroSAT,    
 )
 
 from PIL import Image
@@ -33,6 +38,12 @@ DATASET_DICT = {
         partial(CIFAR100, train=False, download=True),
         partial(CIFAR100, train=False, download=True),
         100,
+    ],
+    "caltech101": [
+        partial(Caltech101, train=True, download=True),
+        partial(Caltech101, train=False, download=True),
+        partial(Caltech101, train=False, download=True),
+        102,
     ],
     "flowers102": [
         partial(Flowers102, split="train", download=True),
@@ -76,6 +87,94 @@ DATASET_DICT = {
         partial(StanfordCars, split="test", download=True),
         196,
     ],
+    "svhn":  [
+        partial(SVHN, split="train", download=True),
+        partial(SVHN, split="test", download=True),
+        partial(SVHN, split="test", download=True),
+        10,
+    ],
+    "SUN397": [
+        partial(SUN397, split="train", download=True),
+        partial(SUN397, split="test", download=True),
+        partial(SUN397, split="test", download=True),
+        397,
+    ],
+
+    "patch_camelyon": [
+        partial(SUN397, split="train", download=True),
+        partial(SUN397, split="test", download=True),
+        partial(SUN397, split="test", download=True),
+        2
+    ],
+    "eurosat": [
+        partial(EuroSAT, split="train", download=True),
+        partial(EuroSAT, split="test", download=True),
+        partial(EuroSAT, split="test", download=True),
+        10
+    ],
+    "resisc45": [
+        partial(SUN397, split="train", download=True),
+        partial(SUN397, split="test", download=True),
+        partial(SUN397, split="test", download=True),
+        45,
+    ],
+    "retinopathy": [
+        partial(SUN397, split="train", download=True),
+        partial(SUN397, split="test", download=True),
+        partial(SUN397, split="test", download=True),
+        5,
+    ],
+    "clevrcount": [
+        partial(SUN397, split="train", download=True),
+        partial(SUN397, split="test", download=True),
+        partial(SUN397, split="test", download=True),
+        8,
+    ],
+    "clevrdist": [
+        partial(SUN397, split="train", download=True),
+        partial(SUN397, split="test", download=True),
+        partial(SUN397, split="test", download=True),
+        6,
+    ],
+    "dmlab": [
+        partial(SUN397, split="train", download=True),
+        partial(SUN397, split="test", download=True),
+        partial(SUN397, split="test", download=True),
+        6,
+    ],
+    "kitti": [
+        partial(SUN397, split="train", download=True),
+        partial(SUN397, split="test", download=True),
+        partial(SUN397, split="test", download=True),
+        4,
+    ],
+    "dsprites_loc": [
+        partial(SUN397, split="train", download=True),
+        partial(SUN397, split="test", download=True),
+        partial(SUN397, split="test", download=True),
+        16,
+    ],
+    "dsprites_ori": [
+        partial(SUN397, split="train", download=True),
+        partial(SUN397, split="test", download=True),
+        partial(SUN397, split="test", download=True),
+        16,
+    ],
+
+    "smallnorb_azi": [
+        partial(SUN397, split="train", download=True),
+        partial(SUN397, split="test", download=True),
+        partial(SUN397, split="test", download=True),
+        18,
+    ],
+
+    "smallnorb_ele": [
+        partial(SUN397, split="train", download=True),
+        partial(SUN397, split="test", download=True),
+        partial(SUN397, split="test", download=True),
+        9,
+    ],
+    
 }
 
 def default_loader(path):
@@ -189,6 +288,8 @@ class DataModule(pl.LightningDataModule):
             )
             print(f"Using custom dataset from {self.root}")
         else:
+            pass
+
             try:
                 (
                     self.train_dataset_fn,
@@ -197,6 +298,7 @@ class DataModule(pl.LightningDataModule):
                     self.num_classes,
                 ) = DATASET_DICT[self.dataset]
                 print(f"Using the {self.dataset} dataset")
+                # print(self.train_dataset_fn)
             except:
                 raise ValueError(
                     f"{dataset} is not an available dataset. Should be one of {[k for k in DATASET_DICT.keys()]}"
@@ -245,13 +347,13 @@ class DataModule(pl.LightningDataModule):
                     transform=self.transforms_train
                 )
                 self.val_dataset = self.val_dataset_fn(transform=self.transforms_test)
-                self.test_dataset = self.test_dataset_fn(transform=self.transforms_test)
             elif stage == "validate":
                 self.val_dataset = self.val_dataset_fn(transform=self.transforms_test)
             elif stage == "test":
                 self.test_dataset = self.test_dataset_fn(transform=self.transforms_test)
         else:
             if stage == "fit":
+                print('>>>> Stage fit \n \n \n')
                 # self.train_dataset = self.train_dataset_fn(
                 #     self.root, transform=self.transforms_train, download=False
                 # )
@@ -264,22 +366,21 @@ class DataModule(pl.LightningDataModule):
                 transform=self.transforms_test)
                 self.test_dataset = ImageFilelist(root=self.root, flist=self.root + "/test.txt",
                 transform=self.transforms_test)
-
             elif stage == "validate":
+                print('>>>> Stage val \n \n \n')
                 # self.val_dataset = self.val_dataset_fn(
                 #     self.root, transform=self.transforms_test, download=False
                 # )
                 self.val_dataset = ImageFilelist(root=self.root, flist=self.root + "/val200.txt",
                 transform=self.transforms_test)
             elif stage == "test":
+                print('>>>> Stage test \n \n \n')
                 # self.test_dataset = self.test_dataset_fn(
                 #     self.root, transform=self.transforms_test, download=False
                 # )
                 self.test_dataset = ImageFilelist(root=self.root, flist=self.root + "/test.txt",
                 transform=self.transforms_test)
-                
-            # print(len(self.train_dataset), stage)
-            # exit()
+
             
 
     def train_dataloader(self):
@@ -289,7 +390,7 @@ class DataModule(pl.LightningDataModule):
             shuffle=True,
             num_workers=self.workers,
             pin_memory=True,
-            drop_last= True,
+            drop_last=True,
         )
 
     def val_dataloader(self):
