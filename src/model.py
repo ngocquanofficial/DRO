@@ -340,7 +340,7 @@ class ClassificationModel(pl.LightningModule):
             model_loss = 0
             # for i in range(self.num_particles) :
 
-            loss = entropy_loss + div_loss - ensemble_loss
+            loss = entropy_loss + div_loss - 0.5 * ensemble_loss
             
             # Get accuracy
             metrics = getattr(self, f"{mode}_metrics")(pred_, y.argmax(1))
