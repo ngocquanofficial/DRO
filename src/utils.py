@@ -54,8 +54,6 @@ def ensemble_entropy(y_true, y_pred, num_model):
     for i in range(len(y_pred)) :
         total += y_pred[i]
 
-    print(total)
-
     # Calculate the ensemble entropy
     ensemble = entropy(total / num_model)
     
