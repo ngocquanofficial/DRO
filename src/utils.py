@@ -39,6 +39,29 @@ def block_expansion(ckpt, split, original_layers):
 
     return output, selected_layers
 
+
+log_offset = 1e-10
+
+def entropy(input):
+    # input shape (batch_size, num_classes)
+    return torch.sum(-input * torch.log(input + log_offset), dim=-1)
+
+
+def ensemble_entropy(y_true, y_pred, num_model):
+
+    # Split y_pred into num_model parts along the last dimension
+    total = torch.zeros_like(y_pred[0])
+    for i in range(len(y_pred)) :
+        total += y_pred[i]
+
+    print(total)
+
+    # Calculate the ensemble entropy
+    ensemble = entropy(total / num_model)
+    
+    return torch.mean(ensemble)
+
+
 def log_det(y_true, pred, num_models):
     mask_non_y_true = ~y_true.bool()  # Mask out the true class
     log_dets = []

@@ -8,7 +8,7 @@ import torch
 import torch.nn.functional as F
 from peft import LoraConfig, get_peft_model
 from torch.optim import SGD, Adam, AdamW
-from .utils import SVGD, RBF, log_det, cal_cosine_similarity, ensemble_entropy
+from .utils import SVGD, RBF, log_det, cal_cosine_similarity
 from torch.optim.lr_scheduler import LambdaLR
 from torch.optim.swa_utils import AveragedModel, SWALR
 from torch.optim.lr_scheduler import CosineAnnealingLR
@@ -22,7 +22,7 @@ import timm
 
 from src.loss import SoftTargetCrossEntropy
 from src.mixup import Mixup
-from .utils import block_expansion
+from .utils import block_expansion, entropy, ensemble_entropy
 from .lora import LoRA_ViT
 from .base_vit2 import ViT, CustomLinear, CustomLinear2
 # from .base_vit import ViT, CustomLinear
