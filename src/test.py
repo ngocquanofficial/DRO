@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 import statistics
-
+log_offset = 1e-7
 def log_det1(y_true, pred):
     mask_non_y_true = ~y_true.bool()  # Mask out the true class
 
@@ -107,6 +107,27 @@ def cal_cosine_similarity(y_true, pred, num_models):
     
     return sum(avg_cosines)/len(avg_cosines), statistics.median(max_cosines), statistics.median(min_cosines)
 
+def entropy(input):
+    # input shape (batch_size, num_classes)
+    return torch.sum(-input * torch.log(input + log_offset), dim=-1)
+
+
+def ensemble_entropy(y_true, y_pred, num_model):
+    y_pred = [torch.nn.functional.softmax(i, dim= -1) for i in y_pred]
+    # Split y_pred into num_model parts along the last dimension
+    total = torch.zeros_like(y_pred[0])
+    for i in range(len(y_pred)) :
+        total += y_pred[i]
+
+    print(total)
+
+    # Calculate the ensemble entropy
+    ensemble = entropy(total / num_model)
+    
+    return torch.mean(ensemble)
+
+
+
 
 y_true = torch.tensor([[0, 0, 0, 1], [1, 0, 0, 0]])
 pred1 = torch.tensor([[1.0,1.0,1.0,1.0], [4.0, 1.0, 0.0, 0.0]])
@@ -115,6 +136,7 @@ pred3 = torch.tensor([[0.0,0.0,0.0,1.0], [4.0, 0.0, 0.0, 1.0]])
 
 pred_list = [pred1, pred2, pred3]
 
-print(cal_cosine_similarity(y_true, pred_list, 3))
+# print(cal_cosine_similarity(y_true, pred_list, 3))
+print(ensemble_entropy(y_true, pred_list, 3))
 
 # print(torch.nn.functional.softmax(pred3, dim= -1))

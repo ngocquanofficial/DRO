@@ -8,7 +8,7 @@ import torch
 import torch.nn.functional as F
 from peft import LoraConfig, get_peft_model
 from torch.optim import SGD, Adam, AdamW
-from .utils import SVGD, RBF, log_det, cal_cosine_similarity
+from .utils import SVGD, RBF, log_det, cal_cosine_similarity, ensemble_entropy
 from torch.optim.lr_scheduler import LambdaLR
 from torch.optim.swa_utils import AveragedModel, SWALR
 from torch.optim.lr_scheduler import CosineAnnealingLR
@@ -336,10 +336,11 @@ class ClassificationModel(pl.LightningModule):
             entropy_loss = self.loss_fn(pred_, y)
             prob_pred = [torch.nn.functional.softmax(i, dim= -1) for i in pred]
             div_loss = - log_det(y, prob_pred, self.num_particles).to(pred[0].device)
+            ensemble_loss = ensemble_entropy(y, prob_pred, self.num_particles)
             model_loss = 0
             # for i in range(self.num_particles) :
 
-            loss = entropy_loss + div_loss * 10
+            loss = entropy_loss + div_loss - ensemble_loss
             
             # Get accuracy
             metrics = getattr(self, f"{mode}_metrics")(pred_, y.argmax(1))
