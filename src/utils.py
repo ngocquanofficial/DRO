@@ -74,9 +74,9 @@ def cal_cosine_similarity(y_true, pred, num_models):
             masked_preds.append(mask_pred)
 
         masked_preds = torch.stack(masked_preds)
-        print(masked_preds)
+
         norm_preds = masked_preds / torch.norm(masked_preds, dim=1, keepdim=True)
-        print(norm_preds)
+
         nonmaximal = norm_preds
 
         n = nonmaximal.shape[0]
@@ -105,7 +105,7 @@ def cal_cosine_similarity(y_true, pred, num_models):
         avg_cosines.append(average_cosine_similarity)
         min_cosines.append(min_cosine)
         max_cosines.append(max_cosine)
-        print(average_cosine_similarity, max_cosine, min_cosine)
+
     
     return sum(avg_cosines)/len(avg_cosines), statistics.median(max_cosines), statistics.median(min_cosines)
 
