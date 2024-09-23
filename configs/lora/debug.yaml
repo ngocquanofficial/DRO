@@ -23,7 +23,7 @@ model:
   lora_r: 8
   lora_alpha: 8
   num_particles: 12
-  use_sam: False
+  use_sam: True
 data:
   dataset: cifar100
   root: ../vtab-1k/cifar100
