@@ -1,8 +1,8 @@
 #!/bin/bash -e
 
-#SBATCH --job-name=abcxyz # create a short name for your job
-#SBATCH --output=/home/quyentt15/quyentt15/Bayesian_finetuning/mbpp%A.out # create a output file
-#SBATCH --error=/home/quyentt15/quyentt15/Bayesian_finetuning/mbpp%A.err # create a error file
+#SBATCH --job-name=cifar100 # create a short name for your job
+#SBATCH --output=/lustre/scratch/client/vinai/users/quanpn2/DRO/sbatch_results/mbpp%A.out # create a output file
+#SBATCH --error=/lustre/scratch/client/vinai/users/quanpn2/DRO/sbatch_results/mbpp%A.err # create a error file
 #SBATCH --partition=research # choose partition
 #SBATCH --gpus-per-node=1
 #SBATCH --cpus-per-task=20
@@ -13,17 +13,17 @@
 #SBATCH --mail-type=begin        # send email when job begins
 #SBATCH --mail-type=end          # send email when job ends
 #SBATCH --mail-type=fail          # send email when job fails
-#SBATCH --mail-user=v.quyentt15@vinai.io
+#SBATCH --mail-user=v.quanpn2@vinai.io
 
-# Activate the conda environment
-source ~/quyentt15/envs/anaconda3/bin/activate coda
 
-cd /home/quyentt15/quyentt15/Bayesian_finetuning/
 
-# python main.py fit --config configs/lora/cifar100-r16-lr-0.05_svgd_1.yaml
-# python main.py fit --config configs/lora/cifar100-r16-lr-0.05_svgd_2.yaml
-# python main.py fit --config configs/lora/cifar100-r16-lr-0.05_svgd_4.yaml
-# python main.py fit --config configs/lora/cifar100-r16-lr-0.05_svgd_6.yaml
+module purge
+module load python/miniconda3/miniconda3
+eval "$(conda shell.bash hook)"
 
-python main.py fit --config configs/lora/cifar100-r16-lr-0.05_svgd_1sam.yaml
 
+
+conda activate /lustre/scratch/client/vinai/users/quanpn2/angry
+
+# Run Python script
+python main.py fit --config configs/lora/debug_tune.yaml

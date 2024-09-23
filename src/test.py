@@ -34,6 +34,7 @@ def log_det1(y_true, pred):
     # return torch.stack(log_dets).mean()
 
 def log_det(y_true, pred, num_models):
+    pred = [torch.nn.functional.softmax(i, dim= -1) for i in pred]
     mask_non_y_true = ~y_true.bool()  # Mask out the true class
     log_dets = []
     
@@ -55,6 +56,8 @@ def log_det(y_true, pred, num_models):
 
 
 def cal_cosine_similarity(y_true, pred, num_models):
+    pred = [torch.nn.functional.softmax(i, dim= -1) for i in pred]
+    print("PRED", pred)
     min_cosines = []
     max_cosines = []
     avg_cosines = []
@@ -84,7 +87,7 @@ def cal_cosine_similarity(y_true, pred, num_models):
         # Calculate pairwise cosine similarity
         for i in range(n):
             for j in range(i + 1, n):
-                cos_sim = F.cosine_similarity(nonmaximal[i].unsqueeze(0), nonmaximal[j].unsqueeze(0))
+                cos_sim = torch.sum(nonmaximal[i] * nonmaximal[j])
                 current = cos_sim.item()  # Extract the scalar value
                 total_similarity += current
 

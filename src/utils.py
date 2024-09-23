@@ -89,7 +89,7 @@ def cal_cosine_similarity(y_true, pred, num_models):
         # Calculate pairwise cosine similarity
         for i in range(n):
             for j in range(i + 1, n):
-                cos_sim = F.cosine_similarity(nonmaximal[i].unsqueeze(0), nonmaximal[j].unsqueeze(0))
+                cos_sim = torch.sum(nonmaximal[i] * nonmaximal[j])
                 current = cos_sim.item()  # Extract the scalar value
                 total_similarity += current
 
