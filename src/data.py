@@ -245,6 +245,7 @@ class DataModule(pl.LightningDataModule):
                     transform=self.transforms_train
                 )
                 self.val_dataset = self.val_dataset_fn(transform=self.transforms_test)
+                self.test_dataset = self.test_dataset_fn(transform=self.transforms_test)
             elif stage == "validate":
                 self.val_dataset = self.val_dataset_fn(transform=self.transforms_test)
             elif stage == "test":
@@ -259,13 +260,16 @@ class DataModule(pl.LightningDataModule):
                 # )
                 self.train_dataset = ImageFilelist(root=self.root, flist=self.root + "/train800.txt",
                 transform=self.transforms_train)
-                self.val_dataset = ImageFilelist(root=self.root, flist=self.root + "/test.txt",
+                self.val_dataset = ImageFilelist(root=self.root, flist=self.root + "/val200.txt",
                 transform=self.transforms_test)
+                self.test_dataset = ImageFilelist(root=self.root, flist=self.root + "/test.txt",
+                transform=self.transforms_test)
+
             elif stage == "validate":
                 # self.val_dataset = self.val_dataset_fn(
                 #     self.root, transform=self.transforms_test, download=False
                 # )
-                self.val_dataset = ImageFilelist(root=self.root, flist=self.root + "/test.txt",
+                self.val_dataset = ImageFilelist(root=self.root, flist=self.root + "/val200.txt",
                 transform=self.transforms_test)
             elif stage == "test":
                 # self.test_dataset = self.test_dataset_fn(
