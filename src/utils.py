@@ -7,6 +7,7 @@ import torch.optim as optim
 from scipy.spatial.distance import pdist, squareform
 import random
 import statistics
+import torch.nn.functional as F
 def block_expansion(ckpt, split, original_layers):
 
     layer_cnt = 0
