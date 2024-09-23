@@ -39,11 +39,7 @@ cli = MyLightningCLI(
     ClassificationModel,
     DataModule,
     save_config_kwargs={"overwrite": True},
-    # trainer_defaults={"check_val_every_n_epoch": None},
-    trainer_defaults={
-        "log_every_n_steps": 15,
-        "check_val_every_n_epoch": None, 
-    },
+    trainer_defaults={"check_val_every_n_epoch": None},
 )
 
 # Copy the config into the experiment directory

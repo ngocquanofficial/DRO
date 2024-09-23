@@ -508,7 +508,7 @@ class ViT(nn.Module):
         num_classes: Optional[int] = None,
         num_particles: int = 1,
         weight_path: str = 'weight_path',
-        dirichlet_const = 10.0,        # FOR DRO
+        dirichlet_const = 1.0,        # FOR DRO
     ):
         super().__init__()
         

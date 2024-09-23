@@ -20,7 +20,7 @@ import timm
 
 from src.loss import SoftTargetCrossEntropy
 from src.mixup import Mixup
-from .utils import block_expansion
+from .utils import block_expansion, log_det
 from .lora import LoRA_ViT
 from .base_vit2 import ViT, CustomLinear, CustomLinear2
 # from .base_vit import ViT, CustomLinear
@@ -344,7 +344,14 @@ class ClassificationModel(pl.LightningModule):
             for j in range(self.num_particles):
                 pred_ = pred_ + pred[j]
             pred_ = pred_/max(1, self.num_particles)
-            loss = self.loss_fn(pred_, y)
+            entropy_loss = self.loss_fn(pred_, y)
+            div_loss = - log_det(y, pred, self.num_particles) # normalize det receive value from (0, 1], then log_let receive value from [-~, 0]
+
+            print(div_loss)
+
+            loss = entropy_loss + div_loss
+
+
             
             # Get accuracy
             metrics = getattr(self, f"{mode}_metrics")(pred_, y.argmax(1))
