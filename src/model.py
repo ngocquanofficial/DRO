@@ -315,6 +315,8 @@ class ClassificationModel(pl.LightningModule):
             self.automatic_optimization = False
 
     def forward(self, x):
+        if x.device!=self.device:
+            x = x.to(self.device)
         if self.optimizer != "svgd":
             return self.net(x).logits
         else:
