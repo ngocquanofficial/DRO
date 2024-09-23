@@ -8,7 +8,7 @@ import torch
 import torch.nn.functional as F
 from peft import LoraConfig, get_peft_model
 from torch.optim import SGD, Adam, AdamW
-from .utils import SVGD, RBF, log_det
+from .utils import SVGD, RBF, log_det, cal_cosine_similarity
 from torch.optim.lr_scheduler import LambdaLR
 from torch.optim.swa_utils import AveragedModel, SWALR
 from torch.optim.lr_scheduler import CosineAnnealingLR
@@ -340,6 +340,12 @@ class ClassificationModel(pl.LightningModule):
             
             # Get accuracy
             metrics = getattr(self, f"{mode}_metrics")(pred_, y.argmax(1))
+            avg_cosine, max_cosine, min_cosine = cal_cosine_similarity(pred)
+            self.log("DIV_LOSS", div_loss, prog_bar=True)
+            self.log("max_cosine", max_cosine, prog_bar=True)
+            self.log("min_cosine", min_cosine, prog_bar=True)
+            self.log("avg_cosine", avg_cosine, prog_bar=True)
+
 
         # Log
         self.log(f"{mode}_loss", loss.item(), on_epoch=True)

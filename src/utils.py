@@ -56,6 +56,30 @@ def log_det(y_true, pred, num_models):
 
     return torch.stack(log_dets).mean()
 
+def cal_cosine_similarity(pred):
+    n = len(pred)
+    total_similarity = 0
+    count = 0
+    max_cosine = 0
+    min_cosine = 1
+
+    # Calculate pairwise cosine similarity
+    for i in range(n):
+        for j in range(i + 1, n):
+            cos_sim = F.cosine_similarity(pred[i].unsqueeze(0), pred[j].unsqueeze(0))
+            current = cos_sim.item()  # Extract the scalar value
+            total_similarity += current
+
+            if current > max_cosine :
+                max_cosine = current
+            if current < min_cosine :
+                min_cosine = current
+
+            count += 1
+    
+    # Calculate the average cosine similarity
+    average_cosine_similarity = total_similarity / count if count > 0 else 0
+    return average_cosine_similarity, max_cosine, min_cosine
 
 class RBF(torch.nn.Module):
   def __init__(self, sigma=None):
