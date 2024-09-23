@@ -346,6 +346,7 @@ class ClassificationModel(pl.LightningModule):
             metrics = getattr(self, f"{mode}_metrics")(pred_, y.argmax(1))
             avg_cosine, max_cosine, min_cosine = cal_cosine_similarity(y, prob_pred, self.num_particles)
             self.log("DIV_LOSS", div_loss, prog_bar=True)
+            self.log("esemble_loss", ensemble_loss, prog_bar = True)
             self.log("max_cosine", max_cosine, prog_bar=True)
             self.log("min_cosine", min_cosine, prog_bar=True)
             self.log("avg_cosine", avg_cosine, prog_bar=True)
