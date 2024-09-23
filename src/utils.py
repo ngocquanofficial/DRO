@@ -6,6 +6,7 @@ import torch.autograd as autograd
 import torch.optim as optim
 from scipy.spatial.distance import pdist, squareform
 import random
+import statistics
 def block_expansion(ckpt, split, original_layers):
 
     layer_cnt = 0
@@ -56,30 +57,57 @@ def log_det(y_true, pred, num_models):
 
     return torch.stack(log_dets).mean()
 
-def cal_cosine_similarity(pred):
-    n = len(pred)
-    total_similarity = 0
-    count = 0
-    max_cosine = 0
-    min_cosine = 1
 
-    # Calculate pairwise cosine similarity
-    for i in range(n):
-        for j in range(i + 1, n):
-            cos_sim = F.cosine_similarity(pred[i].unsqueeze(0), pred[j].unsqueeze(0))
-            current = cos_sim.item()  # Extract the scalar value
-            total_similarity += current
+def cal_cosine_similarity(y_true, pred, num_models):
+    min_cosines = []
+    max_cosines = []
+    avg_cosines = []
 
-            if current > max_cosine :
-                max_cosine = current
-            if current < min_cosine :
-                min_cosine = current
+    mask_non_y_true = ~y_true.bool()  # Mask out the true class
 
-            count += 1
     
-    # Calculate the average cosine similarity
-    average_cosine_similarity = total_similarity / count if count > 0 else 0
-    return average_cosine_similarity, max_cosine, min_cosine
+    for batch in range( pred[0].shape[0] ):  # Iterate over each batch
+        masked_preds = []
+        for i in range(num_models):
+            mask_pred = pred[i][batch][mask_non_y_true[batch]]
+            masked_preds.append(mask_pred)
+
+        masked_preds = torch.stack(masked_preds)
+        print(masked_preds)
+        norm_preds = masked_preds / torch.norm(masked_preds, dim=1, keepdim=True)
+        print(norm_preds)
+        nonmaximal = norm_preds
+
+        n = nonmaximal.shape[0]
+        total_similarity = 0
+        count = 0
+        max_cosine = 0
+        min_cosine = 1
+
+        
+        # Calculate pairwise cosine similarity
+        for i in range(n):
+            for j in range(i + 1, n):
+                cos_sim = F.cosine_similarity(nonmaximal[i].unsqueeze(0), nonmaximal[j].unsqueeze(0))
+                current = cos_sim.item()  # Extract the scalar value
+                total_similarity += current
+
+                if current > max_cosine :
+                    max_cosine = current
+                if current < min_cosine :
+                    min_cosine = current
+
+                count += 1
+        
+        # Calculate the average cosine similarity
+        average_cosine_similarity = total_similarity / count if count > 0 else 0
+        avg_cosines.append(average_cosine_similarity)
+        min_cosines.append(min_cosine)
+        max_cosines.append(max_cosine)
+        print(average_cosine_similarity, max_cosine, min_cosine)
+    
+    return sum(avg_cosines)/len(avg_cosines), statistics.median(max_cosines), statistics.median(min_cosines)
+
 
 class RBF(torch.nn.Module):
   def __init__(self, sigma=None):
