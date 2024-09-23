@@ -640,23 +640,11 @@ class ViT(nn.Module):
 
 
         if hasattr(self, 'fc'):
-            
-            # Get random parameter
-            if self.training :
-                dirichlet_const = torch.tensor([self.dirichlet_const for i in range(self.num_particles)])
-                dirichlet = torch.distributions.Dirichlet(dirichlet_const)
-                sample = dirichlet.sample()
-            else :
-                sample = torch.tensor([1/self.num_particles for i in range(self.num_particles)])
-            
 
             x = self.norm(x)# [:, 0]  # b,d
             res = []
             for i in range(self.num_particles):
                 res_i = x[i][:, 0]  # b,d
-                
-                # Weighted output between particles (FOR DRO)
-                res_i = res_i * sample[i] * self.num_particles
 
                 res.append(res_i)
             x = self.fc(res)  # b,num_classes

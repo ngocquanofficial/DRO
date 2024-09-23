@@ -19,7 +19,11 @@ def log_det(y_true, pred_list, num_models):
         print(norm_preds)
 
         matrix = torch.matmul(norm_preds, norm_preds.t())
-        log_det_val = torch.logdet(matrix + 1e-6 * torch.eye(num_models).to(matrix.device))
+        log_det_val = torch.logdet(matrix + 1e-7 * torch.eye(matrix.shape[0]).detach() )
+        print(1e-6 * torch.eye(matrix.shape[0]).detach() )
+        print("DET")
+        print(torch.logdet(matrix))
+        print(log_det_val)
         log_dets.append(log_det_val)
         
 
