@@ -40,8 +40,12 @@ def block_expansion(ckpt, split, original_layers):
     return output, selected_layers
 
 
-log_offset = 1e-10
 
+
+###############################################
+
+
+log_offset = 1e-10
 def entropy(input):
     # input shape (batch_size, num_classes)
     return torch.sum(-input * torch.log(input + log_offset), dim=-1)
@@ -49,19 +53,19 @@ def entropy(input):
 
 def ensemble_entropy(y_true, y_pred, num_model):
 
-    # Split y_pred into num_model parts along the last dimension
+
     total = torch.zeros_like(y_pred[0])
     for i in range(len(y_pred)) :
         total += y_pred[i]
 
-    # Calculate the ensemble entropy
+
     ensemble = entropy(total / num_model)
     
     return torch.mean(ensemble)
 
 
 def log_det(y_true, pred, num_models):
-    mask_non_y_true = ~y_true.bool()  # Mask out the true class
+    mask_non_y_true = ~y_true.bool()  
     log_dets = []
     
     for batch in range(pred[0].size(0)):  # Iterate over each batch
@@ -80,6 +84,7 @@ def log_det(y_true, pred, num_models):
     return torch.stack(log_dets).mean()
 
 
+# Hàm này e dùng tính cosine_similarity để debug
 def cal_cosine_similarity(y_true, pred, num_models):
     min_cosines = []
     max_cosines = []
@@ -107,11 +112,11 @@ def cal_cosine_similarity(y_true, pred, num_models):
         min_cosine = 1
 
         
-        # Calculate pairwise cosine similarity
+
         for i in range(n):
             for j in range(i + 1, n):
                 cos_sim = torch.sum(nonmaximal[i] * nonmaximal[j])
-                current = cos_sim.item()  # Extract the scalar value
+                current = cos_sim.item()  
                 total_similarity += current
 
                 if current > max_cosine :
@@ -121,7 +126,7 @@ def cal_cosine_similarity(y_true, pred, num_models):
 
                 count += 1
         
-        # Calculate the average cosine similarity
+
         average_cosine_similarity = total_similarity / count if count > 0 else 0
         avg_cosines.append(average_cosine_similarity)
         min_cosines.append(min_cosine)
@@ -130,6 +135,8 @@ def cal_cosine_similarity(y_true, pred, num_models):
     
     return sum(avg_cosines)/len(avg_cosines), statistics.median(max_cosines), statistics.median(min_cosines)
 
+
+##############################################
 
 class RBF(torch.nn.Module):
   def __init__(self, sigma=None):
@@ -281,6 +288,11 @@ class SVGD(torch.optim.Adam):
         return q_A, q_B, v_A, v_B, cls_w, cls_b
 
 
+
+
+
+
+##############################################################
     @torch.no_grad()
     def step1(self, zero_grad=False):
         """First step: Perturb particle-specific parameters using SAM logic and save the original parameters."""
@@ -560,6 +572,8 @@ class SVGD(torch.optim.Adam):
         closure()
         self.second_step()
 
+
+###################################################################
 
     def load_state_dict(self, state_dict):
         super().load_state_dict(state_dict)

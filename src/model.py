@@ -181,7 +181,7 @@ class ClassificationModel(pl.LightningModule):
                     new_state_dict[k] = v
 
             self.net.load_state_dict(new_state_dict, strict=True)
-            
+    
 
         # Prepare model depending on fine-tuning mode
         if self.training_mode == "linear":
@@ -284,6 +284,9 @@ class ClassificationModel(pl.LightningModule):
             }
         )
 
+
+# HERE A TUẤN !!!!!!!!!!!!!!!!   ###########################################
+
         # Define loss
         self.loss_fn = SoftTargetCrossEntropy()
 
@@ -362,8 +365,11 @@ class ClassificationModel(pl.LightningModule):
             self.test_metric_outputs.append(metrics["stats"])
             
         return loss
+    
+##############################################
 
     def training_step(self, batch, _):
+
         if self.optimizer == 'svgd':
             self.log("lr", self.trainer.optimizers[0].param_groups[0]["lr"], prog_bar=True)
             opt = self.optimizers()
@@ -375,6 +381,7 @@ class ClassificationModel(pl.LightningModule):
             
             opt.zero_grad()
             self.manual_backward(loss)
+
 
             # SAM HERE
             opt.step1(zero_grad= True)
@@ -388,31 +395,26 @@ class ClassificationModel(pl.LightningModule):
             
 
             scheduler.step()
-            # return loss
 
                 
-        else:
-            opt = self.optimizers()
-            scheduler = self.lr_schedulers()
-            loss = self.shared_step(batch, "train")
+        # else:
+        #     print("")
+        #     opt = self.optimizers()
+        #     scheduler = self.lr_schedulers()
+        #     loss = self.shared_step(batch, "train")
             
-            opt.zero_grad()
-            self.manual_backward(loss)
-            opt.step()
-            scheduler.step()
+        #     opt.zero_grad()
+        #     self.manual_backward(loss)
+        #     opt.step()
+        #     scheduler.step()
             
-            self.log("lr", self.trainer.optimizers[0].param_groups[0]["lr"], prog_bar=True)
-            # return self.shared_step(batch, "train")
+        #     self.log("lr", self.trainer.optimizers[0].param_groups[0]["lr"], prog_bar=True)
+        #     # return self.shared_step(batch, "train")
+
 
     def validation_step(self, batch, _):
-        if self.optimizer == 'SWAG' or self.optimizer == 'flat_seeking':
-            self.swag.sample(0.0)
-            bn_update(batch, self.swag)
-            
-        elif self.optimizer == 'svgd' and self.use_swa_svgd:
-            torch.optim.swa_utils.update_bn(batch, self.swa_model)
+
         val = self.shared_step(batch, "val")
-        # self.test_step(batch, _)
         return val
     
     def on_validation_epoch_end(self):
@@ -473,14 +475,8 @@ class ClassificationModel(pl.LightningModule):
                 momentum=self.momentum,
                 weight_decay=self.weight_decay,
             )
-        elif self.optimizer == 'SWAG' or self.optimizer == 'flat_seeking' :
-            # print(self.net.parameters())
-            optimizer = SGD(
-                self.net.parameters(),
-                lr=self.lr,
-                momentum=self.momentum,
-                weight_decay=self.weight_decay,
-            )
+
+
         elif self.optimizer == "svgd":  #use Adam as the base optimizer by default @@        
             base_optimizer = torch.optim.SGD
 
