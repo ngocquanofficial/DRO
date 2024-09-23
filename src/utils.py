@@ -77,7 +77,13 @@ def log_det(y_true, pred, num_models):
         masked_preds = torch.stack(masked_preds)
         norm_preds = masked_preds / torch.norm(masked_preds, dim=1, keepdim=True)
 
+        # Check var
+        for idx in range(num_models) :
+            vector = norm_preds[idx]
+            l2_norm = torch.norm(vector, p=2).item()
+
         matrix = torch.matmul(norm_preds, norm_preds.t())
+
         log_det_val = torch.logdet(matrix + 1e-7 * torch.eye(num_models).to(pred[0].device))
         log_dets.append(log_det_val)
 
