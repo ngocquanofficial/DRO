@@ -398,6 +398,11 @@ class ClassificationModel(pl.LightningModule):
         for batch in test_dataloader:
             self.test_step(batch, 0)
 
+        print("Validation metrics:", self.trainer.callback_metrics)
+        # Ensure that val_acc is in the metrics dictionary
+        if 'val_acc' in self.trainer.callback_metrics:
+            print("val_acc:", self.trainer.callback_metrics['val_acc'])
+
     def on_validation_epoch_start(self):
         # Reset calibration metric at the start of each validation epoch
         self.val_metrics["ece"].reset()

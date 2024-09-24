@@ -30,9 +30,11 @@ data:
   size: 224
   batch_size: 24
   workers: 4
+
 model_checkpoint:
   dirpath: saved_checkpoints_new
-  filename: cifar100_DRO-step-{step}-{val_acc:.4f}
-  monitor: val_acc
-  mode: max
-  save_last: true
+  filename: latest_cifar_DRO
+  save_last: true   
+  monitor: val_acc  
+  mode: max         
+  save_top_k: 1     
