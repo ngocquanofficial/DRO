@@ -207,9 +207,7 @@ class ClassificationModel(pl.LightningModule):
             else: #init multiple net @@ corresponding to different particles
                 
                 self.net = LoRA_ViT(num_particles=self.num_particles, vit_model=self.net, r=self.lora_r, alpha=self.lora_alpha, num_classes=self.n_classes)
-                if self.optimizer == 'svgd' and self.use_swa_svgd:
-                    self.swa_model = AveragedModel(self.net)
-                    
+
 
                     
         elif self.training_mode == "block":
@@ -440,10 +438,8 @@ class ClassificationModel(pl.LightningModule):
 
 
         # Initialize learning rate scheduler
-        if self.optimizer == 'svgd' and self.use_swa_svgd:
-            scheduler = CosineAnnealingLR(optimizer, T_max=100)
-            self.swa_scheduler = SWALR(optimizer, swa_lr=0.05)
-        elif self.scheduler == "cosine":
+
+        if self.scheduler == "cosine":
             scheduler = get_cosine_schedule_with_warmup(
                 optimizer,
                 num_training_steps=int(self.trainer.estimated_stepping_batches),
