@@ -370,33 +370,32 @@ class ClassificationModel(pl.LightningModule):
 
     def training_step(self, batch, _):
 
-        if self.optimizer == 'svgd':
-            self.log("lr", self.trainer.optimizers[0].param_groups[0]["lr"], prog_bar=True)
-            opt = self.optimizers()
-            scheduler = self.lr_schedulers()
-            
-            torch.autograd.set_detect_anomaly(True)
+        self.log("lr", self.trainer.optimizers[0].param_groups[0]["lr"], prog_bar=True)
+        opt = self.optimizers()
+        scheduler = self.lr_schedulers()
+        
+        torch.autograd.set_detect_anomaly(True)
 
-            loss = self.shared_step(batch, "train")
-            
-            opt.zero_grad()
-            self.manual_backward(loss)
+        loss = self.shared_step(batch, "train")
+        
+        opt.zero_grad()
+        self.manual_backward(loss)
 
 
-            # SAM HERE
-            opt.step1(zero_grad= True)
-            loss = self.shared_step(batch, "train")
+        # SAM HERE
+        opt.step1(zero_grad= True)
+        loss = self.shared_step(batch, "train")
 
-            self.manual_backward(loss)
-            opt.step2(zero_grad= True)
-                    
-
-            opt.zero_grad()
-            
-
-            scheduler.step()
-
+        self.manual_backward(loss)
+        opt.step2(zero_grad= True)
                 
+
+        opt.zero_grad()
+        
+
+        scheduler.step()
+
+        
         # else:
         #     print("")
         #     opt = self.optimizers()
@@ -453,39 +452,13 @@ class ClassificationModel(pl.LightningModule):
         self.test_metrics["ece"].reset()
 
     def configure_optimizers(self):
-        # Initialize optimizer
-        if self.optimizer == "adam":
-            optimizer = Adam(
-                self.net.parameters(),
-                lr=self.lr,
-                betas=self.betas,
-                weight_decay=self.weight_decay,
-            )
-        elif self.optimizer == "adamw":
-            optimizer = AdamW(
-                self.net.parameters(),
-                lr=self.lr,
-                betas=self.betas,
-                weight_decay=self.weight_decay,
-            )
-        elif self.optimizer in ["sgd", 'deep_ens']:
-            optimizer = SGD(
-                self.net.parameters(),
-                lr=self.lr,
-                momentum=self.momentum,
-                weight_decay=self.weight_decay,
-            )
 
+       
+        base_optimizer = torch.optim.SGD
 
-        elif self.optimizer == "svgd":  #use Adam as the base optimizer by default @@        
-            base_optimizer = torch.optim.SGD
+        optimizer =  SVGD(param = self.net.parameters(),base_optimizer= base_optimizer, lr=self.lr, betas=self.betas,
+            weight_decay=self.weight_decay, num_particles=self.num_particles, train_module=self, net=self.net)
 
-            optimizer =  SVGD(param = self.net.parameters(),base_optimizer= base_optimizer, lr=self.lr, betas=self.betas,
-                weight_decay=self.weight_decay, num_particles=self.num_particles, train_module=self, net=self.net)
-        else:
-            raise ValueError(
-                f"{self.optimizer} is not an available optimizer. Should be one of ['adam', 'adamw', 'sgd', 'deepEns']"
-            )
 
         # Initialize learning rate scheduler
         if self.optimizer == 'svgd' and self.use_swa_svgd:

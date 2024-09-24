@@ -22,7 +22,7 @@ model:
   warmup_steps: 500
   lora_r: 8
   lora_alpha: 8
-  num_particles: 12
+  num_particles: 4
   use_sam: True
 data:
   dataset: cifar100
