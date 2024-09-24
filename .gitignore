@@ -5,6 +5,8 @@ weights/
 notebooks/
 checkpoint/
 cifar100/images/
+saved_checkpoints/
+sbatch_results/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

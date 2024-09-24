@@ -8,7 +8,8 @@ import torch
 import torch.nn.functional as F
 from peft import LoraConfig, get_peft_model
 from torch.optim import SGD, Adam, AdamW
-from .utils import SVGD, RBF, log_det, cal_cosine_similarity
+from src.utils import SVGD, RBF, log_det, cal_cosine_similarity
+
 from torch.optim.lr_scheduler import LambdaLR
 from torch.optim.swa_utils import AveragedModel, SWALR
 from torch.optim.lr_scheduler import CosineAnnealingLR
@@ -22,9 +23,10 @@ import timm
 
 from src.loss import SoftTargetCrossEntropy
 from src.mixup import Mixup
-from .utils import block_expansion, entropy, ensemble_entropy
-from .lora import LoRA_ViT
-from .base_vit2 import ViT, CustomLinear, CustomLinear2
+
+from src.utils import block_expansion, entropy, ensemble_entropy
+from src.lora import LoRA_ViT
+from src.base_vit2 import ViT, CustomLinear, CustomLinear2
 # from .base_vit import ViT, CustomLinear
 
 torch.autograd.set_detect_anomaly(True)
@@ -322,37 +324,28 @@ class ClassificationModel(pl.LightningModule):
             y = F.one_hot(y, num_classes=self.n_classes).float()
 
         
-        if self.optimizer not in ['svgd', 'deep_ens', 'SWAG', 'flat_seeking']:
-            # Pass through network
+        pred = self(x)
+        pred_ = 0 #pred
+        for j in range(self.num_particles):
+            pred_ = pred_ + pred[j]
+        pred_ = pred_/max(1, self.num_particles)
+        entropy_loss = self.loss_fn(pred_, y)
+        prob_pred = [torch.nn.functional.softmax(i, dim= -1) for i in pred]
+        div_loss = - log_det(y, prob_pred, self.num_particles).to(pred[0].device)
+        ensemble_loss = ensemble_entropy(y, prob_pred, self.num_particles)
+        model_loss = 0
+        # for i in range(self.num_particles) :
 
-            pred = self(x)
-            loss = self.loss_fn(pred, y)
-            # Get accuracy
-            metrics = getattr(self, f"{mode}_metrics")(pred, y.argmax(1))
-
-        else:
-            pred = self(x)
-            pred_ = 0 #pred
-            for j in range(self.num_particles):
-                pred_ = pred_ + pred[j]
-            pred_ = pred_/max(1, self.num_particles)
-            entropy_loss = self.loss_fn(pred_, y)
-            prob_pred = [torch.nn.functional.softmax(i, dim= -1) for i in pred]
-            div_loss = - log_det(y, prob_pred, self.num_particles).to(pred[0].device)
-            ensemble_loss = ensemble_entropy(y, prob_pred, self.num_particles)
-            model_loss = 0
-            # for i in range(self.num_particles) :
-
-            loss = entropy_loss + div_loss - 0.5 * ensemble_loss
-            
-            # Get accuracy
-            metrics = getattr(self, f"{mode}_metrics")(pred_, y.argmax(1))
-            avg_cosine, max_cosine, min_cosine = cal_cosine_similarity(y, prob_pred, self.num_particles)
-            self.log("DIV_LOSS", div_loss, prog_bar=True)
-            self.log("esemble_loss", ensemble_loss, prog_bar = True)
-            self.log("max_cosine", max_cosine, prog_bar=True)
-            self.log("min_cosine", min_cosine, prog_bar=True)
-            self.log("avg_cosine", avg_cosine, prog_bar=True)
+        loss = entropy_loss + 0.25 * div_loss - 0.5 * ensemble_loss
+        
+        # Get accuracy
+        metrics = getattr(self, f"{mode}_metrics")(pred_, y.argmax(1))
+        avg_cosine, max_cosine, min_cosine = cal_cosine_similarity(y, prob_pred, self.num_particles)
+        self.log(f"{mode}_DIV_LOSS", div_loss, prog_bar=True)
+        self.log(f"{mode}_esemble_loss", ensemble_loss, prog_bar = True)
+        self.log(f"{mode}_max_cosine", max_cosine, prog_bar=True)
+        self.log(f"{mode}_min_cosine", min_cosine, prog_bar=True)
+        self.log(f"{mode}_avg_cosine", avg_cosine, prog_bar=True)
 
 
         # Log
@@ -392,23 +385,9 @@ class ClassificationModel(pl.LightningModule):
 
         opt.zero_grad()
         
-
         scheduler.step()
 
-        
-        # else:
-        #     print("")
-        #     opt = self.optimizers()
-        #     scheduler = self.lr_schedulers()
-        #     loss = self.shared_step(batch, "train")
-            
-        #     opt.zero_grad()
-        #     self.manual_backward(loss)
-        #     opt.step()
-        #     scheduler.step()
-            
-        #     self.log("lr", self.trainer.optimizers[0].param_groups[0]["lr"], prog_bar=True)
-        #     # return self.shared_step(batch, "train")
+
 
 
     def validation_step(self, batch, _):
