@@ -6,15 +6,15 @@ trainer:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
       save_dir: output
-      name: dtd-completed-0.5-ensemble-weight
-  max_epochs: 150
+      name: dtd-completed
+  max_epochs: 350
   # max_steps: 10000
   val_check_interval: 50
   num_sanity_val_steps: 0
 model:
   model_name: vit-b16-224-dino
   training_mode: lora
-  optimizer: deep_ens
+  optimizer: svgd
   lr: 0.15
   momentum: 0.9
   weight_decay: 0.0
@@ -23,7 +23,7 @@ model:
   lora_r: 8
   lora_alpha: 8
   num_particles: 4
-  use_sam: False
+  use_sam: True
 data:
   dataset: dtd
   root: ../vtab-1k/dtd
@@ -31,8 +31,8 @@ data:
   batch_size: 24
   workers: 4
 model_checkpoint:
-  dirpath: saved_checkpoints
-  filename: cifar100-step-{step}-{val_acc:.4f}
+  dirpath: saved_checkpoints_new
+  filename: dtd-step-{step}-{val_acc:.4f}
   monitor: val_acc
   mode: max
   save_last: true
