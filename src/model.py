@@ -438,7 +438,7 @@ class ClassificationModel(pl.LightningModule):
         base_optimizer = torch.optim.SGD
 
         optimizer =  SVGD(param = self.net.parameters(),base_optimizer= base_optimizer, lr=self.lr, betas=self.betas,
-            weight_decay=self.weight_decay, num_particles=self.num_particles, train_module=self, net=self.net)
+            weight_decay=self.weight_decay, num_particles=self.num_particles, train_module=self, net=self.net, rho = self.rho)
 
 
         # Initialize learning rate scheduler
