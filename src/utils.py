@@ -336,7 +336,7 @@ class SVGD(torch.optim.Adam):
                                     for _ in range(self.grad_loop) : 
                                         e_w = p.grad - 2 * self.state[p]['lamda'] * (p - self.state[p]["old_p"])  
 
-                                        # Normalize and rescale to make sure that norm(e_w) = rho/2
+                                        # Normalize and rescale to make sure that norm(e_w) = rho
                                         e_w = e_w / (e_w.norm() + 1e-12 ) * (self.rho)
                                         p.add_(e_w.view(p.data.shape))
                                         # print("Very CURRENT DIST: ", torch.dist( p, self.state[p]["old_p"] ,p= 2))
@@ -358,7 +358,7 @@ class SVGD(torch.optim.Adam):
                                     for _ in range(self.grad_loop) : 
                                         e_w = p.grad - 2 * self.state[p]['lamda'] * (p - self.state[p]["old_p"])  
 
-                                        # Normalize and rescale to make sure that norm(e_w) = rho/2
+                                        # Normalize and rescale to make sure that norm(e_w)
                                         e_w = e_w / (e_w.norm() + 1e-12 ) * (self.rho)
                                         p.add_(e_w.view(p.data.shape))
                                         # print("Very CURRENT DIST: ", torch.dist( p, self.state[p]["old_p"] ,p= 2))
