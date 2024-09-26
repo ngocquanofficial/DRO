@@ -8,6 +8,7 @@ cifar100/images/
 saved_checkpoints/
 sbatch_results/
 images/
+metrics.csv
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
