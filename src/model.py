@@ -330,11 +330,10 @@ class ClassificationModel(pl.LightningModule):
         entropy_loss = self.loss_fn(pred_, y)
         prob_pred = [torch.nn.functional.softmax(i, dim= -1) for i in pred]
         div_loss = - log_det(y, prob_pred, self.num_particles).to(pred[0].device)
-        ensemble_loss = ensemble_entropy(y, prob_pred, self.num_particles)
-        model_loss = 0
+        # ensemble_loss = ensemble_entropy(y, prob_pred, self.num_particles)
         # for i in range(self.num_particles) :
 
-        loss = entropy_loss + 0.25 * div_loss - 0.5 * ensemble_loss
+        loss = entropy_loss + 0.2 * div_loss
         
         # Get accuracy
         metrics = getattr(self, f"{mode}_metrics")(pred_, y.argmax(1))

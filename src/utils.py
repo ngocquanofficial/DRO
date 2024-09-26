@@ -194,7 +194,7 @@ class SVGD(torch.optim.Adam):
         self.defaults.update(self.base_optimizer.defaults)
         
         self.momentum = betas[0]
-        self.grad_loop = 3
+        self.grad_loop = 2
         # Init velocity and lamda
 
         for n, p in self.net.lora_vit.named_parameters():
@@ -329,7 +329,7 @@ class SVGD(torch.optim.Adam):
                                     # Save the original parameters for each particle and layer
                                     self.state[p]['old_p'] = p.data.clone()
 
-                                    perturb = ( self.state[p]['velocity'] / (self.state[p]['velocity'].norm() + 1e-12) ) * (self.rho / 2)
+                                    perturb = ( self.state[p]['velocity'] / (self.state[p]['velocity'].norm() + 1e-12) ) * (self.rho)
                                     p.add_(perturb.view(p.data.shape))  # Apply perturbation
 
 
@@ -337,7 +337,7 @@ class SVGD(torch.optim.Adam):
                                         e_w = p.grad - 2 * self.state[p]['lamda'] * (p - self.state[p]["old_p"])  
 
                                         # Normalize and rescale to make sure that norm(e_w) = rho/2
-                                        e_w = e_w / (e_w.norm() + 1e-12 ) * (self.rho / 2)
+                                        e_w = e_w / (e_w.norm() + 1e-12 ) * (self.rho)
                                         p.add_(e_w.view(p.data.shape))
                                         # print("Very CURRENT DIST: ", torch.dist( p, self.state[p]["old_p"] ,p= 2))
 
@@ -351,7 +351,7 @@ class SVGD(torch.optim.Adam):
                                     # Save the original parameters for each particle and layer
                                     self.state[p]['old_p'] = p.data.clone()
 
-                                    perturb = ( self.state[p]['velocity'] / (self.state[p]['velocity'].norm() + 1e-12) ) * (self.rho / 2)
+                                    perturb = ( self.state[p]['velocity'] / (self.state[p]['velocity'].norm() + 1e-12) ) * (self.rho)
                                     p.add_(perturb.view(p.data.shape))  # Apply perturbation
 
 
@@ -359,7 +359,7 @@ class SVGD(torch.optim.Adam):
                                         e_w = p.grad - 2 * self.state[p]['lamda'] * (p - self.state[p]["old_p"])  
 
                                         # Normalize and rescale to make sure that norm(e_w) = rho/2
-                                        e_w = e_w / (e_w.norm() + 1e-12 ) * (self.rho / 2)
+                                        e_w = e_w / (e_w.norm() + 1e-12 ) * (self.rho)
                                         p.add_(e_w.view(p.data.shape))
                                         # print("Very CURRENT DIST: ", torch.dist( p, self.state[p]["old_p"] ,p= 2))
 
@@ -375,7 +375,7 @@ class SVGD(torch.optim.Adam):
                                     # Save the original parameters for each particle and layer
                                     self.state[p]['old_p'] = p.data.clone()
 
-                                    perturb = ( self.state[p]['velocity'] / (self.state[p]['velocity'].norm() + 1e-12) ) * (self.rho / 2)
+                                    perturb = ( self.state[p]['velocity'] / (self.state[p]['velocity'].norm() + 1e-12) ) * (self.rho)
                                     p.add_(perturb.view(p.data.shape))  # Apply perturbation
 
 
@@ -383,7 +383,7 @@ class SVGD(torch.optim.Adam):
                                         e_w = p.grad - 2 * self.state[p]['lamda'] * (p - self.state[p]["old_p"])  
 
                                         # Normalize and rescale to make sure that norm(e_w) = rho/2
-                                        e_w = e_w / (e_w.norm() + 1e-12 ) * (self.rho / 2)
+                                        e_w = e_w / (e_w.norm() + 1e-12 ) * (self.rho)
                                         p.add_(e_w.view(p.data.shape))
                                         # print("Very CURRENT DIST: ", torch.dist( p, self.state[p]["old_p"] ,p= 2))
 
@@ -398,7 +398,7 @@ class SVGD(torch.optim.Adam):
                                     # Save the original parameters for each particle and layer
                                     self.state[p]['old_p'] = p.data.clone()
 
-                                    perturb = ( self.state[p]['velocity'] / (self.state[p]['velocity'].norm() + 1e-12) ) * (self.rho / 2)
+                                    perturb = ( self.state[p]['velocity'] / (self.state[p]['velocity'].norm() + 1e-12) ) * (self.rho)
                                     p.add_(perturb.view(p.data.shape))  # Apply perturbation
 
 
@@ -406,7 +406,7 @@ class SVGD(torch.optim.Adam):
                                         e_w = p.grad - 2 * self.state[p]['lamda'] * (p - self.state[p]["old_p"])  
 
                                         # Normalize and rescale to make sure that norm(e_w) = rho/2
-                                        e_w = e_w / (e_w.norm() + 1e-12 ) * (self.rho / 2)
+                                        e_w = e_w / (e_w.norm() + 1e-12 ) * (self.rho)
                                         p.add_(e_w.view(p.data.shape))
                                         # print("Very CURRENT DIST: ", torch.dist( p, self.state[p]["old_p"] ,p= 2))
 
@@ -422,7 +422,7 @@ class SVGD(torch.optim.Adam):
                                 # Save the original parameters for each particle and layer
                                 self.state[p]['old_p'] = p.data.clone()
 
-                                perturb = ( self.state[p]['velocity'] / (self.state[p]['velocity'].norm() + 1e-12) ) * (self.rho / 2)
+                                perturb = ( self.state[p]['velocity'] / (self.state[p]['velocity'].norm() + 1e-12) ) * (self.rho)
                                 p.add_(perturb.view(p.data.shape))  # Apply perturbation
 
 
@@ -430,7 +430,7 @@ class SVGD(torch.optim.Adam):
                                     e_w = p.grad - 2 * self.state[p]['lamda'] * (p - self.state[p]["old_p"])  
 
                                     # Normalize and rescale to make sure that norm(e_w) = rho/2
-                                    e_w = e_w / (e_w.norm() + 1e-12 ) * (self.rho / 2)
+                                    e_w = e_w / (e_w.norm() + 1e-12 ) * (self.rho)
                                     p.add_(e_w.view(p.data.shape))
                                     # print("Very CURRENT DIST: ", torch.dist( p, self.state[p]["old_p"] ,p= 2))
 
@@ -444,7 +444,7 @@ class SVGD(torch.optim.Adam):
                                 # Save the original parameters for each particle and layer
                                 self.state[p]['old_p'] = p.data.clone()
 
-                                perturb = ( self.state[p]['velocity'] / (self.state[p]['velocity'].norm() + 1e-12) ) * (self.rho / 2)
+                                perturb = ( self.state[p]['velocity'] / (self.state[p]['velocity'].norm() + 1e-12) ) * (self.rho)
                                 p.add_(perturb.view(p.data.shape))  # Apply perturbation
 
 
@@ -452,7 +452,7 @@ class SVGD(torch.optim.Adam):
                                     e_w = p.grad - 2 * self.state[p]['lamda'] * (p - self.state[p]["old_p"])  
 
                                     # Normalize and rescale to make sure that norm(e_w) = rho/2
-                                    e_w = e_w / (e_w.norm() + 1e-12 ) * (self.rho / 2)
+                                    e_w = e_w / (e_w.norm() + 1e-12 ) * (self.rho)
                                     p.add_(e_w.view(p.data.shape))
                                     # print("Very CURRENT DIST: ", torch.dist( p, self.state[p]["old_p"] ,p= 2))
 
@@ -574,9 +574,9 @@ class SVGD(torch.optim.Adam):
         assert closure is not None, "Sharpness Aware Minimization requires closure, but it was not provided"
         closure = torch.enable_grad()(closure)  # the closure should do a full forward-backward pass
 
-        self.first_step(zero_grad=True)
+        self.step1(zero_grad=True)
         closure()
-        self.second_step()
+        self.step2()
 
 
 ###################################################################

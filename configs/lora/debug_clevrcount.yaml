@@ -6,16 +6,16 @@ trainer:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
       save_dir: output
-      name: cifar100-completed
-  max_epochs: 400
+      name: clevrcount-completed
+  max_epochs: 350
   # max_steps: 10000
-  val_check_interval: 100
+  val_check_interval: 50
   num_sanity_val_steps: 0
 model:
   model_name: vit-b16-224-dino
   training_mode: lora
   optimizer: svgd
-  lr: 0.5
+  lr: 0.15
   momentum: 0.9
   weight_decay: 0.0
   scheduler: cosine
@@ -25,16 +25,14 @@ model:
   num_particles: 4
   use_sam: True
 data:
-  dataset: cifar100
-  root: ../vtab-1k/cifar100
+  dataset: clevrcount
+  root: ../vtab-1k/clevrcount
   size: 224
   batch_size: 24
   workers: 4
-
 model_checkpoint:
   dirpath: saved_checkpoints_new
-  filename: latest_cifar_DRO
-  save_last: true   
-  monitor: val_acc  
-  mode: max         
-  save_top_k: 1     
+  filename: dtd-step-{step}-{val_acc:.4f}
+  monitor: val_acc
+  mode: max
+  save_last: true
