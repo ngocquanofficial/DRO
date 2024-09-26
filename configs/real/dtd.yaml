@@ -6,13 +6,13 @@ trainer:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
       save_dir: output
-      name: dtd-flat1
+      name: dtd-real
   max_epochs: 200
   # max_steps: 10000
-  val_check_interval: 50
+  val_check_interval: 100
   num_sanity_val_steps: 0
 model:
-  model_name: vit-b16-224-in21k
+  model_name: vit-b16-224-dino
   training_mode: lora
   optimizer: svgd
   rho: 0.05
@@ -27,7 +27,7 @@ model:
   use_sam: True
 data:
   dataset: dtd
-  root: ../flat_bnn_dro/vtab-1k/dtd
+  root: ../vtab-1k/dtd
   batch_size: 32
   workers: 4
   train_aug: False

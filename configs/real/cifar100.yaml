@@ -9,10 +9,10 @@ trainer:
       name: cifar100-real
   max_epochs: 200
   # max_steps: 10000
-  val_check_interval: 50
+  val_check_interval: 100
   num_sanity_val_steps: 0
 model:
-  model_name: vit-b16-224-in21k
+  model_name: vit-b16-224-dino
   training_mode: lora
   optimizer: svgd
   rho: 0.03

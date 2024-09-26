@@ -26,4 +26,4 @@ eval "$(conda shell.bash hook)"
 conda activate /lustre/scratch/client/vinai/users/quanpn2/angry
 
 # Run Python script
-python main.py fit --config configs/lora/debug_clevrcount.yaml
+python main.py fit --config configs/real/clevr_count.yaml
