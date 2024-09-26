@@ -346,7 +346,7 @@ class ClassificationModel(pl.LightningModule):
         # ensemble_loss = ensemble_entropy(y, prob_pred, self.num_particles)
         # for i in range(self.num_particles) :
 
-        loss = entropy_loss      #+ 0.2 * div_loss
+        loss = entropy_loss #+ 0.2 * div_loss
         
         # Get accuracy
         metrics = getattr(self, f"{mode}_metrics")(pred_, y.argmax(1))
@@ -451,7 +451,7 @@ class ClassificationModel(pl.LightningModule):
         base_optimizer = torch.optim.SGD
 
         optimizer =  SVGD(param = self.net.parameters(),base_optimizer= base_optimizer, lr=self.lr, betas=self.betas,
-            weight_decay=self.weight_decay, num_particles=self.num_particles, train_module=self, net=self.net)
+            weight_decay=self.weight_decay, num_particles=self.num_particles, train_module=self, net=self.net, rho= self.rho)
 
 
         # Initialize learning rate scheduler
