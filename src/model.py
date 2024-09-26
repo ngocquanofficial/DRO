@@ -372,6 +372,8 @@ class ClassificationModel(pl.LightningModule):
 ##############################################
 
     def training_step(self, batch, _):
+        X, y = batch
+        bz = X.shape[0]
 
         self.log("lr", self.trainer.optimizers[0].param_groups[0]["lr"], prog_bar=True)
         opt = self.optimizers()
@@ -379,20 +381,25 @@ class ClassificationModel(pl.LightningModule):
         
         torch.autograd.set_detect_anomaly(True)
 
+
+        store = True
+
+        for i in range(self.num_particles) :
+            sub_X = X[int(i/ self.num_particles * bz) : int( (i+1)/ self.num_particles * bz)]
+            sub_y = y[int(i/ self.num_particles * bz) : int( (i+1)/ self.num_particles * bz)]
+            sub_batch = (sub_X, sub_y)
+            loss = self.shared_step(sub_batch, "train")
+            opt.zero_grad()
+            self.manual_backward(loss)
+            opt.step1(zero_grad= True, store= store)
+            store = False
+
+
+
         loss = self.shared_step(batch, "train")
-        
-        opt.zero_grad()
-        self.manual_backward(loss)
-
-
-        # SAM HERE
-        opt.step1(zero_grad= True)
-        loss = self.shared_step(batch, "train")
-
         self.manual_backward(loss)
         opt.step2(zero_grad= True)
                 
-
         opt.zero_grad()
         
         scheduler.step()
