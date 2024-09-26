@@ -192,16 +192,7 @@ class SVGD(torch.optim.Adam):
         self.base_optimizer = base_optimizer(self.param_groups, **kwargs)
         self.param_groups = self.base_optimizer.param_groups
         self.defaults.update(self.base_optimizer.defaults)
-        
-        self.momentum = betas[0]
-        self.grad_loop = 2
-        # Init velocity and lamda
 
-        for n, p in self.net.lora_vit.named_parameters():
-
-            if p.requires_grad :
-                self.state[p]['velocity'] = torch.zeros_like(p.data)
-                self.state[p]['lamda'] = lamda
 
 
 
@@ -332,19 +323,6 @@ class SVGD(torch.optim.Adam):
                                     perturb = ( self.state[p]['velocity'] / (self.state[p]['velocity'].norm() + 1e-12) ) * (self.rho)
                                     p.add_(perturb.view(p.data.shape))  # Apply perturbation
 
-
-                                    for _ in range(self.grad_loop) : 
-                                        e_w = p.grad - 2 * self.state[p]['lamda'] * (p - self.state[p]["old_p"])  
-
-                                        # Normalize and rescale to make sure that norm(e_w) = rho/2
-                                        e_w = e_w / (e_w.norm() + 1e-12 ) * (self.rho)
-                                        p.add_(e_w.view(p.data.shape))
-                                        # print("Very CURRENT DIST: ", torch.dist( p, self.state[p]["old_p"] ,p= 2))
-
-
-                                    # Update velocity, notice that p now is theta prime, NOT theta
-                                    self.state[p]['velocity'].mul_(self.momentum).add_( (1 - self.momentum) * p.grad.data )
-
                                 
                                 elif f"w_b.layer.{net_id}" in n:
 
@@ -353,19 +331,6 @@ class SVGD(torch.optim.Adam):
 
                                     perturb = ( self.state[p]['velocity'] / (self.state[p]['velocity'].norm() + 1e-12) ) * (self.rho)
                                     p.add_(perturb.view(p.data.shape))  # Apply perturbation
-
-
-                                    for _ in range(self.grad_loop) : 
-                                        e_w = p.grad - 2 * self.state[p]['lamda'] * (p - self.state[p]["old_p"])  
-
-                                        # Normalize and rescale to make sure that norm(e_w) = rho/2
-                                        e_w = e_w / (e_w.norm() + 1e-12 ) * (self.rho)
-                                        p.add_(e_w.view(p.data.shape))
-                                        # print("Very CURRENT DIST: ", torch.dist( p, self.state[p]["old_p"] ,p= 2))
-
-
-                                    # Update velocity, notice that p now is theta prime, NOT theta
-                                    self.state[p]['velocity'].mul_(self.momentum).add_( (1 - self.momentum) * p.grad.data )
 
 
                             elif "proj_v" in n:
@@ -379,19 +344,6 @@ class SVGD(torch.optim.Adam):
                                     p.add_(perturb.view(p.data.shape))  # Apply perturbation
 
 
-                                    for _ in range(self.grad_loop) : 
-                                        e_w = p.grad - 2 * self.state[p]['lamda'] * (p - self.state[p]["old_p"])  
-
-                                        # Normalize and rescale to make sure that norm(e_w) = rho/2
-                                        e_w = e_w / (e_w.norm() + 1e-12 ) * (self.rho)
-                                        p.add_(e_w.view(p.data.shape))
-                                        # print("Very CURRENT DIST: ", torch.dist( p, self.state[p]["old_p"] ,p= 2))
-
-
-                                    # Update velocity, notice that p now is theta prime, NOT theta
-                                    self.state[p]['velocity'].mul_(self.momentum).add_( (1 - self.momentum) * p.grad.data )
-
-
                                 elif f"w_b.layer.{net_id}" in n:
 
 
@@ -400,19 +352,6 @@ class SVGD(torch.optim.Adam):
 
                                     perturb = ( self.state[p]['velocity'] / (self.state[p]['velocity'].norm() + 1e-12) ) * (self.rho)
                                     p.add_(perturb.view(p.data.shape))  # Apply perturbation
-
-
-                                    for _ in range(self.grad_loop) : 
-                                        e_w = p.grad - 2 * self.state[p]['lamda'] * (p - self.state[p]["old_p"])  
-
-                                        # Normalize and rescale to make sure that norm(e_w) = rho/2
-                                        e_w = e_w / (e_w.norm() + 1e-12 ) * (self.rho)
-                                        p.add_(e_w.view(p.data.shape))
-                                        # print("Very CURRENT DIST: ", torch.dist( p, self.state[p]["old_p"] ,p= 2))
-
-
-                                    # Update velocity, notice that p now is theta prime, NOT theta
-                                    self.state[p]['velocity'].mul_(self.momentum).add_( (1 - self.momentum) * p.grad.data )
 
 
                         elif 'fc' in n:
@@ -426,19 +365,6 @@ class SVGD(torch.optim.Adam):
                                 p.add_(perturb.view(p.data.shape))  # Apply perturbation
 
 
-                                for _ in range(self.grad_loop) : 
-                                    e_w = p.grad - 2 * self.state[p]['lamda'] * (p - self.state[p]["old_p"])  
-
-                                    # Normalize and rescale to make sure that norm(e_w) = rho/2
-                                    e_w = e_w / (e_w.norm() + 1e-12 ) * (self.rho)
-                                    p.add_(e_w.view(p.data.shape))
-                                    # print("Very CURRENT DIST: ", torch.dist( p, self.state[p]["old_p"] ,p= 2))
-
-
-                                # Update velocity, notice that p now is theta prime, NOT theta
-                                self.state[p]['velocity'].mul_(self.momentum).add_( (1 - self.momentum) * p.grad.data )
-
-
                             elif 'bias' in n:
 
                                 # Save the original parameters for each particle and layer
@@ -446,19 +372,6 @@ class SVGD(torch.optim.Adam):
 
                                 perturb = ( self.state[p]['velocity'] / (self.state[p]['velocity'].norm() + 1e-12) ) * (self.rho)
                                 p.add_(perturb.view(p.data.shape))  # Apply perturbation
-
-
-                                for _ in range(self.grad_loop) : 
-                                    e_w = p.grad - 2 * self.state[p]['lamda'] * (p - self.state[p]["old_p"])  
-
-                                    # Normalize and rescale to make sure that norm(e_w) = rho/2
-                                    e_w = e_w / (e_w.norm() + 1e-12 ) * (self.rho)
-                                    p.add_(e_w.view(p.data.shape))
-                                    # print("Very CURRENT DIST: ", torch.dist( p, self.state[p]["old_p"] ,p= 2))
-
-
-                                # Update velocity, notice that p now is theta prime, NOT theta
-                                self.state[p]['velocity'].mul_(self.momentum).add_( (1 - self.momentum) * p.grad.data )
 
                         # Mark this parameter as updated
                         updated_n.add(n)
@@ -474,7 +387,6 @@ class SVGD(torch.optim.Adam):
         lr = self.param_groups[0]['lr']
         # Restore the original parameters
         updated_n = set()  # Track which parameters have been restored
-        curr_dist = False
 
         for net_id in range(self.num_particles):
             for layer_id in range(12):  # Assuming 12 layers
@@ -486,21 +398,11 @@ class SVGD(torch.optim.Adam):
                             if "proj_q" in n:
                                 if f"w_a.layer.{net_id}" in n:
                                     
-                                        
-                                    curr_dist = torch.dist( p, self.state[p]["old_p"] ,p= 2)
-                                    lamda_ew =  (self.rho - curr_dist )
-                                    self.state[p]['lamda'] = self.state[p]['lamda'] - lamda_ew * lr
-
                                     p.data = self.state[p]['old_p']
 
 
 
                                 elif f"w_b.layer.{net_id}" in n:
-                                    
-
-                                    curr_dist = torch.dist( p, self.state[p]["old_p"] ,p= 2)
-                                    lamda_ew =  (self.rho - curr_dist )
-                                    self.state[p]['lamda'] = self.state[p]['lamda'] - lamda_ew * lr
 
                                     p.data = self.state[p]['old_p']
 
@@ -508,19 +410,11 @@ class SVGD(torch.optim.Adam):
                             elif "proj_v" in n:
                                 if f"w_a.layer.{net_id}" in n:
                                     
-                                    curr_dist = torch.dist( p, self.state[p]["old_p"] ,p= 2)
-                                    lamda_ew =  (self.rho - curr_dist )
-                                    self.state[p]['lamda'] = self.state[p]['lamda'] - lamda_ew * lr
-
                                     p.data = self.state[p]['old_p']
 
 
 
                                 elif f"w_b.layer.{net_id}" in n:
-
-                                    curr_dist = torch.dist( p, self.state[p]["old_p"] ,p= 2)
-                                    lamda_ew =  (self.rho - curr_dist )
-                                    self.state[p]['lamda'] = self.state[p]['lamda'] - lamda_ew * lr
 
                                     p.data = self.state[p]['old_p']
 
@@ -532,10 +426,6 @@ class SVGD(torch.optim.Adam):
                         elif 'fc' in n:
                             if 'weight' in n:
 
-                                curr_dist = torch.dist( p, self.state[p]["old_p"] ,p= 2)
-                                lamda_ew =  (self.rho - curr_dist )
-                                self.state[p]['lamda'] = self.state[p]['lamda'] - lamda_ew * lr
-
                                 p.data = self.state[p]['old_p']
 
 
@@ -543,10 +433,6 @@ class SVGD(torch.optim.Adam):
 
                             elif 'bias' in n:
                                 
-                                curr_dist = torch.dist( p, self.state[p]["old_p"] ,p= 2)
-                                lamda_ew =  (self.rho - curr_dist )
-                                self.state[p]['lamda'] = self.state[p]['lamda'] - lamda_ew * lr
-
                                 p.data = self.state[p]['old_p']
 
 
