@@ -26,7 +26,7 @@ model:
   use_sam: True
 data:
   dataset: cifar100
-  root: ../vtab-1k/cifar100
+  root: ../flat_bnn_dro/vtab-1k/cifar100
   size: 224
   batch_size: 24
   workers: 4

@@ -6,7 +6,7 @@ trainer:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
       save_dir: output
-      name: caltech-completed
+      name: caltech-flat
   max_epochs: 350
   # max_steps: 10000
   val_check_interval: 50
@@ -26,7 +26,7 @@ model:
   use_sam: True
 data:
   dataset: caltech101
-  root: ../vtab-1k/caltech101
+  root: ../flat_bnn_dro/vtab-1k/caltech101
   size: 224
   batch_size: 24
   workers: 4

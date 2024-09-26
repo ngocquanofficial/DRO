@@ -320,7 +320,7 @@ class SVGD(torch.optim.Adam):
                                     # Save the original parameters for each particle and layer
                                     self.state[p]['old_p'] = p.data.clone()
 
-                                    perturb = ( self.state[p]['velocity'] / (self.state[p]['velocity'].norm() + 1e-12) ) * (self.rho)
+                                    perturb = torch.nn.functional.normalize(q_A_grad[layer_id][net_id],  p=2, dim=0) * (self.rho)
                                     p.add_(perturb.view(p.data.shape))  # Apply perturbation
 
                                 
@@ -329,7 +329,7 @@ class SVGD(torch.optim.Adam):
                                     # Save the original parameters for each particle and layer
                                     self.state[p]['old_p'] = p.data.clone()
 
-                                    perturb = ( self.state[p]['velocity'] / (self.state[p]['velocity'].norm() + 1e-12) ) * (self.rho)
+                                    perturb = torch.nn.functional.normalize(q_B_grad[layer_id][net_id],  p=2, dim=0) * (self.rho)
                                     p.add_(perturb.view(p.data.shape))  # Apply perturbation
 
 
@@ -340,7 +340,7 @@ class SVGD(torch.optim.Adam):
                                     # Save the original parameters for each particle and layer
                                     self.state[p]['old_p'] = p.data.clone()
 
-                                    perturb = ( self.state[p]['velocity'] / (self.state[p]['velocity'].norm() + 1e-12) ) * (self.rho)
+                                    perturb = torch.nn.functional.normalize(v_A_grad[layer_id][net_id],  p=2, dim=0) * (self.rho)
                                     p.add_(perturb.view(p.data.shape))  # Apply perturbation
 
 
@@ -350,7 +350,7 @@ class SVGD(torch.optim.Adam):
                                     # Save the original parameters for each particle and layer
                                     self.state[p]['old_p'] = p.data.clone()
 
-                                    perturb = ( self.state[p]['velocity'] / (self.state[p]['velocity'].norm() + 1e-12) ) * (self.rho)
+                                    perturb = torch.nn.functional.normalize(v_B_grad[layer_id][net_id],  p=2, dim=0) * (self.rho)
                                     p.add_(perturb.view(p.data.shape))  # Apply perturbation
 
 
@@ -361,7 +361,7 @@ class SVGD(torch.optim.Adam):
                                 # Save the original parameters for each particle and layer
                                 self.state[p]['old_p'] = p.data.clone()
 
-                                perturb = ( self.state[p]['velocity'] / (self.state[p]['velocity'].norm() + 1e-12) ) * (self.rho)
+                                perturb = torch.nn.functional.normalize(clsW_grad[layer_id][net_id],  p=2, dim=0) * (self.rho)
                                 p.add_(perturb.view(p.data.shape))  # Apply perturbation
 
 
@@ -370,7 +370,7 @@ class SVGD(torch.optim.Adam):
                                 # Save the original parameters for each particle and layer
                                 self.state[p]['old_p'] = p.data.clone()
 
-                                perturb = ( self.state[p]['velocity'] / (self.state[p]['velocity'].norm() + 1e-12) ) * (self.rho)
+                                perturb = torch.nn.functional.normalize(clsB_grad[layer_id][net_id],  p=2, dim=0) * (self.rho)
                                 p.add_(perturb.view(p.data.shape))  # Apply perturbation
 
                         # Mark this parameter as updated

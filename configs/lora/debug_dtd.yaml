@@ -26,7 +26,7 @@ model:
   use_sam: True
 data:
   dataset: dtd
-  root: ../vtab-1k/dtd
+  root: ../flat_bnn_dro/vtab-1k/dtd
   size: 224
   batch_size: 24
   workers: 4

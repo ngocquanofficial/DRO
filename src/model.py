@@ -328,21 +328,21 @@ class ClassificationModel(pl.LightningModule):
             pred_ = pred_ + pred[j]
         pred_ = pred_/max(1, self.num_particles)
         entropy_loss = self.loss_fn(pred_, y)
-        prob_pred = [torch.nn.functional.softmax(i, dim= -1) for i in pred]
-        div_loss = - log_det(y, prob_pred, self.num_particles).to(pred[0].device)
+        # prob_pred = [torch.nn.functional.softmax(i, dim= -1) for i in pred]
+        # div_loss = - log_det(y, prob_pred, self.num_particles).to(pred[0].device)
         # ensemble_loss = ensemble_entropy(y, prob_pred, self.num_particles)
         # for i in range(self.num_particles) :
 
-        loss = entropy_loss + 0.2 * div_loss
+        loss = entropy_loss      #+ 0.2 * div_loss
         
         # Get accuracy
         metrics = getattr(self, f"{mode}_metrics")(pred_, y.argmax(1))
-        avg_cosine, max_cosine, min_cosine = cal_cosine_similarity(y, prob_pred, self.num_particles)
-        self.log(f"{mode}_DIV_LOSS", div_loss, prog_bar=True)
+        # avg_cosine, max_cosine, min_cosine = cal_cosine_similarity(y, prob_pred, self.num_particles)
+        # self.log(f"{mode}_DIV_LOSS", div_loss, prog_bar=True)
         # self.log(f"{mode}_esemble_loss", ensemble_loss, prog_bar = True)
-        self.log(f"{mode}_max_cosine", max_cosine, prog_bar=True)
-        self.log(f"{mode}_min_cosine", min_cosine, prog_bar=True)
-        self.log(f"{mode}_avg_cosine", avg_cosine, prog_bar=True)
+        # self.log(f"{mode}_max_cosine", max_cosine, prog_bar=True)
+        # self.log(f"{mode}_min_cosine", min_cosine, prog_bar=True)
+        # self.log(f"{mode}_avg_cosine", avg_cosine, prog_bar=True)
 
 
         # Log

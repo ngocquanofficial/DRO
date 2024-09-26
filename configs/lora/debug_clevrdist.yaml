@@ -26,7 +26,7 @@ model:
   use_sam: True
 data:
   dataset: clevrdist
-  root: ../vtab-1k/clevrdist
+  root: ../flat_bnn_dro/vtab-1k/clevr_dist
   size: 224
   batch_size: 24
   workers: 4
