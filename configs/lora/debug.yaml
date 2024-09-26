@@ -19,9 +19,8 @@ model:
   lr: 0.15
   momentum: 0.9
   weight_decay: 0.0
-  labelsmoothing: 0.1
   scheduler: cosine
-  warmup_epochs: 10
+  warmup_steps: 500
   lora_r: 8
   lora_alpha: 8
   num_particles: 4
@@ -30,7 +29,7 @@ data:
   dataset: cifar100
   root: ../flat_bnn_dro/vtab-1k/cifar100
   size: 224
-  batch_size: 64
+  batch_size: 32
   workers: 4
   train_aug: False
 
