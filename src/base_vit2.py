@@ -454,15 +454,32 @@ class Transformer(nn.Module):
         self.num_particles = num_particles
 
     def forward(self, x, mask=None):
-        orginal_x = x
-        x = []
-        for i in range(self.num_particles):
-            x.append(orginal_x.detach())
-    
-        for block in self.blocks:
-            x = block(x, mask)
-            
-        return x
+        if not self.training :
+            print("Evaluate")
+
+            orginal_x = x
+            x = []
+            for i in range(self.num_particles):
+                x.append(orginal_x.detach())
+        
+            for block in self.blocks:
+                x = block(x, mask)
+                
+            return x
+
+
+        else : # self.training
+            print("Training")
+            bz = orginal_x.shape[0]
+            orginal_x = x
+            x = []
+            for i in range(self.num_particles):
+                x.append(orginal_x[ int(i/ self.num_particles * bz): int( (i+1)/ self.num_particles * bz) ].detach())
+        
+            for block in self.blocks:
+                x = block(x, mask)
+                
+            return x
 
 
 class PositionalEmbedding1D(nn.Module):
