@@ -314,6 +314,7 @@ class ClassificationModel(pl.LightningModule):
     def shared_step(self, batch, mode="train"):
         x, y = batch
         x, y = x.cuda(), y.cuda()
+        bz = x.shape[0]
 
         if mode == "train":
             # Only converts targets to one-hot if no label smoothing, mixup or cutmix is set
@@ -322,27 +323,39 @@ class ClassificationModel(pl.LightningModule):
             y = F.one_hot(y, num_classes=self.n_classes).float()
 
         
+        # if mode == "train" :
+        #     subloss = 0
+        #     for i in range(self.num_particles) :
+        #         sub_x = x[ int(i/ self.num_particles * bz): int( (i+1)/ self.num_particles * bz) ]
+        #         sub_y = y[ int(i/ self.num_particles * bz): int( (i+1)/ self.num_particles * bz) ] 
+        #         sub_pred = self(sub_x)
+        #         subloss += self.loss_fn(sub_x, sub_y)
+
+        #     loss = subloss / self.num_particles
+
+        # else :
+
         pred = self(x)
         pred_ = 0 #pred
         for j in range(self.num_particles):
             pred_ = pred_ + pred[j]
         pred_ = pred_/max(1, self.num_particles)
         entropy_loss = self.loss_fn(pred_, y)
-        prob_pred = [torch.nn.functional.softmax(i, dim= -1) for i in pred]
-        div_loss = - log_det(y, prob_pred, self.num_particles).to(pred[0].device)
+        # prob_pred = [torch.nn.functional.softmax(i, dim= -1) for i in pred]
+        # div_loss = - log_det(y, prob_pred, self.num_particles).to(pred[0].device)
         # ensemble_loss = ensemble_entropy(y, prob_pred, self.num_particles)
         # for i in range(self.num_particles) :
 
-        loss = entropy_loss + 0.2 * div_loss
+        loss = entropy_loss      #+ 0.2 * div_loss
         
         # Get accuracy
         metrics = getattr(self, f"{mode}_metrics")(pred_, y.argmax(1))
-        avg_cosine, max_cosine, min_cosine = cal_cosine_similarity(y, prob_pred, self.num_particles)
-        self.log(f"{mode}_DIV_LOSS", div_loss, prog_bar=True)
+        # avg_cosine, max_cosine, min_cosine = cal_cosine_similarity(y, prob_pred, self.num_particles)
+        # self.log(f"{mode}_DIV_LOSS", div_loss, prog_bar=True)
         # self.log(f"{mode}_esemble_loss", ensemble_loss, prog_bar = True)
-        self.log(f"{mode}_max_cosine", max_cosine, prog_bar=True)
-        self.log(f"{mode}_min_cosine", min_cosine, prog_bar=True)
-        self.log(f"{mode}_avg_cosine", avg_cosine, prog_bar=True)
+        # self.log(f"{mode}_max_cosine", max_cosine, prog_bar=True)
+        # self.log(f"{mode}_min_cosine", min_cosine, prog_bar=True)
+        # self.log(f"{mode}_avg_cosine", avg_cosine, prog_bar=True)
 
 
         # Log
