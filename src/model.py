@@ -24,7 +24,7 @@ import timm
 from src.loss import SoftTargetCrossEntropy
 from src.mixup import Mixup
 
-from src.utils import block_expansion, entropy, ensemble_entropy
+from src.utils import block_expansion, entropy, ensemble_entropy, fisher_distance
 from src.lora import LoRA_ViT
 from src.base_vit2 import ViT, CustomLinear, CustomLinear2
 # from .base_vit import ViT, CustomLinear
@@ -83,7 +83,8 @@ class ClassificationModel(pl.LightningModule):
         use_sam: bool = False,
         weights_path: str = 'checkpoint/B_16.pth',
         grad_loop: int = 3,
-        lamda = 1
+        lamda = 1,
+        distance= "fisher"
     ):
         """Classification Model
 
@@ -141,7 +142,8 @@ class ClassificationModel(pl.LightningModule):
         self.num_particles =  num_particles
         self.use_sam = use_sam
         self.grad_loop = grad_loop
-        self.lamda = torch.tensor(float(lamda), requires_grad=False)
+        self.lamda = torch.tensor(float(lamda), requires_grad=False).to("cuda")
+        self.distance = distance
 
         # Initialize network
         try:
@@ -363,69 +365,61 @@ class ClassificationModel(pl.LightningModule):
 ##############################################
 
     def training_step(self, batch, _):
-        print("START HERE")
-        X, y = batch
-        bz = X.shape[0]
+        x, y = batch
+        x, y = x.cuda(), y.cuda()
+
+        x, y = self.mixup(x, y)
+
         current_lr = self.trainer.optimizers[0].param_groups[0]["lr"]
         self.log("lr", current_lr, prog_bar=True)
 
         opt = self.optimizers()
         scheduler = self.lr_schedulers()
-        
         torch.autograd.set_detect_anomaly(True)
 
 
-        store = True
-        _, original_output = self.shared_step(batch, "train") 
-        print("First checkpoint")
-        # Initialize
-        old_output = 0
-        new_output = 0
+        loss, original_output = self.shared_step(batch, "train") 
 
-        for i in range(self.grad_loop) :
+        opt.zero_grad()
+        self.manual_backward(loss)
 
-            sub_X = X[int(i/ self.grad_loop * bz) : int( (i+1)/ self.grad_loop * bz)]
-            sub_y = y[int(i/ self.grad_loop * bz) : int( (i+1)/ self.grad_loop * bz)]
-            sub_batch = (sub_X, sub_y)
-            old_output = new_output # Old of current step = New of previous step
-            sub_loss, new_output = self.shared_step(sub_batch, "train")
-            print("Second checkpoint")
-            if i == 0 :
-                current_distance = 0
-            else :
-                current_distance = torch.dist( new_output, old_output.detach().clone() ,p= 2)
+        opt.perturb(zero_grad= True)
 
-            sub_loss = sub_loss - self.lamda * current_distance
 
-            opt.zero_grad()
 
-            self.manual_backward(sub_loss)
-            # if i == self.grad_loop - 1 :
-            #     self.manual_backward(sub_loss)
-            # else :
-            #     self.manual_backward(sub_loss, retain_graph=True)
+        perturb_loss, perturb_output = self.shared_step(batch, "train")
 
-            opt.step1(zero_grad= True, store= store)
-            store = False
-            print("Third checkpoint")
+        if self.distance == "euclid" :
+            current_distance = torch.dist( perturb_output, original_output.detach().clone() ,p= 2)
+        elif self.distance == "fisher" :
+            current_distance = torch.dist( perturb_output, original_output.detach().clone())
+        else :
+            print("SET UP DISTANCE TYPE")
+        updated_loss = perturb_loss - self.lamda * current_distance
+        opt.zero_grad()
+        self.manual_backward(updated_loss)
+
+        opt.step1(zero_grad= True)
+
 
 
         # STEP 2
-        print("We can come here!!!")
-        loss, perturb_output = self.shared_step(batch, "train")
-        print("Second come or not")
-        perturb_distance = torch.dist( original_output, perturb_output.detach().clone(),p= 2)
-        print("Third come or not")
-        loss = loss + self.lamda * self.rho - self.lamda * perturb_distance
-        print("Fourth come or not")
-
-
-        self.manual_backward(loss, retain_graph=True)
-        opt.step2(zero_grad= True)
-        print("Last come")
+        _, final_output = self.shared_step(batch, "train")
         
+        if self.distance == "euclid" :
+            final_distance = torch.dist(final_output, original_output.detach().clone() ,p= 2)
+        else :
+            final_distance = fisher_distance(final_output, original_output.detach().clone() )
+
+        final_loss = self.loss_fn(final_output, y) - self.lamda * final_distance
+
+        self.manual_backward(final_loss, retain_graph=True)
+        opt.step2(zero_grad= True)
+        
+
         # Update lamda by hand 
-        lamda_ew = self.rho - perturb_distance
+
+        lamda_ew = self.rho - final_distance.detach().clone()
         self.lamda -= current_lr * lamda_ew
         self.lamda = max(0, self.lamda) # ensure lamda >= 0
 
@@ -434,7 +428,7 @@ class ClassificationModel(pl.LightningModule):
 
         # Log lamda
         self.log(f"LAMDA", self.lamda.item(), on_epoch=True)
-        self.log(f"perturb_distance", perturb_distance.item(), on_epoch=True)
+        self.log(f"perturb_distance", final_distance.item(), on_epoch=True)
 
 
 

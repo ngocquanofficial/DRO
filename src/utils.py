@@ -8,6 +8,26 @@ from scipy.spatial.distance import pdist, squareform
 import random
 import statistics
 import torch.nn.functional as F
+
+def fisher_distance(pred1, pred2) :
+    prob1 = torch.nn.functional.softmax(pred1, dim=-1)
+    prob2 = torch.nn.functional.softmax(pred2, dim=-1)
+
+    log_prob1 = torch.nn.functional.log_softmax(pred1, dim=-1)
+    log_prob2 = torch.nn.functional.log_softmax(pred2, dim=-1)
+
+    kl_div1 = torch.nn.functional.kl_div(log_prob1, prob2, reduction='batchmean')
+    kl_div2 = torch.nn.functional.kl_div(log_prob2, prob1, reduction='batchmean')
+
+    return 1/2 * (kl_div1 + kl_div2)
+
+
+
+
+
+
+
+
 def block_expansion(ckpt, split, original_layers):
 
     layer_cnt = 0
@@ -297,8 +317,10 @@ class SVGD(torch.optim.Adam):
 
 
 ##############################################################
+
+
     @torch.no_grad()
-    def step1(self, zero_grad=False, store= True):
+    def perturb(self, zero_grad=False):
         """First step: Perturb particle-specific parameters using SAM logic and save the original parameters."""
         
         # Get the particle-specific gradients for all LoRA layers
@@ -308,6 +330,76 @@ class SVGD(torch.optim.Adam):
         updated_n = set()
         lr = self.param_groups[0]['lr']
 
+
+        for net_id in range(self.num_particles):
+            for layer_id in range(12):  # Assuming 12 layers
+                for n, p in self.net.lora_vit.named_parameters():
+
+                    if p.requires_grad and n not in updated_n:
+
+
+                        # Perturb the specific gradients for each particle and layer
+                        if f'blocks.{str(layer_id)}' in n:
+                            if "proj_q" in n:
+                                if f"w_a.layer.{net_id}" in n:
+
+                                    self.state[p]['old_p'] = p.data.clone()
+                                    e_w = p.grad/ (p.grad.norm() + 1e-12 ) * (self.rho)
+                                    p.add_(e_w.view(p.data.shape))
+                                
+                                elif f"w_b.layer.{net_id}" in n:
+
+                                    self.state[p]['old_p'] = p.data.clone()
+                                    e_w = p.grad/ (p.grad.norm() + 1e-12 ) * (self.rho)
+                                    p.add_(e_w.view(p.data.shape))
+
+                            elif "proj_v" in n:
+                                if f"w_a.layer.{net_id}" in n:
+
+                                    self.state[p]['old_p'] = p.data.clone()
+                                    e_w = p.grad/ (p.grad.norm() + 1e-12 ) * (self.rho)
+                                    p.add_(e_w.view(p.data.shape))
+
+                                elif f"w_b.layer.{net_id}" in n:
+
+                                    self.state[p]['old_p'] = p.data.clone()
+                                    e_w = p.grad/ (p.grad.norm() + 1e-12 ) * (self.rho)
+                                    p.add_(e_w.view(p.data.shape))
+
+
+                        elif 'fc' in n:
+                            if 'weight' in n:
+
+                                self.state[p]['old_p'] = p.data.clone()
+                                e_w = p.grad/ (p.grad.norm() + 1e-12 ) * (self.rho)
+                                p.add_(e_w.view(p.data.shape))
+                                
+
+                            elif 'bias' in n:
+                            
+                                self.state[p]['old_p'] = p.data.clone()
+                                e_w = p.grad/ (p.grad.norm() + 1e-12 ) * (self.rho)
+                                p.add_(e_w.view(p.data.shape))
+                        # Mark this parameter as updated
+                        updated_n.add(n)
+
+                    
+
+        if zero_grad:
+            self.zero_grad()
+
+
+
+    @torch.no_grad()
+    def step1(self, zero_grad=False, store= False):
+        """First step: Perturb particle-specific parameters using SAM logic and save the original parameters."""
+        
+        # Get the particle-specific gradients for all LoRA layers
+        q_A_grad, q_B_grad, v_A_grad, v_B_grad, clsW_grad, clsB_grad = self.get_grad1()
+
+        # Create a set to keep track of the updated parameters
+        updated_n = set()
+        lr = self.param_groups[0]['lr']
 
 
         for net_id in range(self.num_particles):
