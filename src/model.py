@@ -82,6 +82,8 @@ class ClassificationModel(pl.LightningModule):
         num_particles: int = 10,
         use_sam: bool = False,
         weights_path: str = 'checkpoint/B_16.pth',
+        grad_loop: int = 3,
+        lamda = 1
     ):
         """Classification Model
 
@@ -138,6 +140,8 @@ class ClassificationModel(pl.LightningModule):
         self.from_scratch = from_scratch
         self.num_particles =  num_particles
         self.use_sam = use_sam
+        self.grad_loop = grad_loop
+        self.lamda = torch.tensor(float(lamda), requires_grad=False)
 
         # Initialize network
         try:
@@ -322,18 +326,7 @@ class ClassificationModel(pl.LightningModule):
         else:
             y = F.one_hot(y, num_classes=self.n_classes).float()
 
-        
-        # if mode == "train" :
-        #     subloss = 0
-        #     for i in range(self.num_particles) :
-        #         sub_x = x[ int(i/ self.num_particles * bz): int( (i+1)/ self.num_particles * bz) ]
-        #         sub_y = y[ int(i/ self.num_particles * bz): int( (i+1)/ self.num_particles * bz) ] 
-        #         sub_pred = self(sub_x)
-        #         subloss += self.loss_fn(sub_x, sub_y)
 
-        #     loss = subloss / self.num_particles
-
-        # else :
 
         pred = self(x)
         pred_ = 0 #pred
@@ -341,21 +334,19 @@ class ClassificationModel(pl.LightningModule):
             pred_ = pred_ + pred[j]
         pred_ = pred_/max(1, self.num_particles)
         entropy_loss = self.loss_fn(pred_, y)
-        # prob_pred = [torch.nn.functional.softmax(i, dim= -1) for i in pred]
-        # div_loss = - log_det(y, prob_pred, self.num_particles).to(pred[0].device)
-        # ensemble_loss = ensemble_entropy(y, prob_pred, self.num_particles)
-        # for i in range(self.num_particles) :
 
-        loss = entropy_loss #+ 0.2 * div_loss
+        prob_pred = [torch.nn.functional.softmax(i, dim= -1) for i in pred]
+        div_loss = - log_det(y, prob_pred, self.num_particles).to(pred[0].device)
+        # ensemble_loss = ensemble_entropy(y, prob_pred, self.num_particles)
+
+        loss = entropy_loss + 0.2 * div_loss
         
         # Get accuracy
         metrics = getattr(self, f"{mode}_metrics")(pred_, y.argmax(1))
-        # avg_cosine, max_cosine, min_cosine = cal_cosine_similarity(y, prob_pred, self.num_particles)
-        # self.log(f"{mode}_DIV_LOSS", div_loss, prog_bar=True)
-        # self.log(f"{mode}_esemble_loss", ensemble_loss, prog_bar = True)
-        # self.log(f"{mode}_max_cosine", max_cosine, prog_bar=True)
-        # self.log(f"{mode}_min_cosine", min_cosine, prog_bar=True)
-        # self.log(f"{mode}_avg_cosine", avg_cosine, prog_bar=True)
+
+        self.log(f"{mode}_DIV_LOSS", div_loss, prog_bar=True)
+
+
 
 
         # Log
@@ -367,15 +358,17 @@ class ClassificationModel(pl.LightningModule):
         if mode == "test":
             self.test_metric_outputs.append(metrics["stats"])
             
-        return loss
+        return loss, pred_
     
 ##############################################
 
     def training_step(self, batch, _):
+        print("START HERE")
         X, y = batch
         bz = X.shape[0]
+        current_lr = self.trainer.optimizers[0].param_groups[0]["lr"]
+        self.log("lr", current_lr, prog_bar=True)
 
-        self.log("lr", self.trainer.optimizers[0].param_groups[0]["lr"], prog_bar=True)
         opt = self.optimizers()
         scheduler = self.lr_schedulers()
         
@@ -383,33 +376,72 @@ class ClassificationModel(pl.LightningModule):
 
 
         store = True
+        _, original_output = self.shared_step(batch, "train") 
+        print("First checkpoint")
+        # Initialize
+        old_output = 0
+        new_output = 0
 
-        for i in range(self.num_particles) :
-            sub_X = X[int(i/ self.num_particles * bz) : int( (i+1)/ self.num_particles * bz)]
-            sub_y = y[int(i/ self.num_particles * bz) : int( (i+1)/ self.num_particles * bz)]
+        for i in range(self.grad_loop) :
+
+            sub_X = X[int(i/ self.grad_loop * bz) : int( (i+1)/ self.grad_loop * bz)]
+            sub_y = y[int(i/ self.grad_loop * bz) : int( (i+1)/ self.grad_loop * bz)]
             sub_batch = (sub_X, sub_y)
-            loss = self.shared_step(sub_batch, "train")
+            old_output = new_output # Old of current step = New of previous step
+            sub_loss, new_output = self.shared_step(sub_batch, "train")
+            print("Second checkpoint")
+            if i == 0 :
+                current_distance = 0
+            else :
+                current_distance = torch.dist( new_output, old_output.detach().clone() ,p= 2)
+
+            sub_loss = sub_loss - self.lamda * current_distance
+
             opt.zero_grad()
-            self.manual_backward(loss)
+
+            self.manual_backward(sub_loss)
+            # if i == self.grad_loop - 1 :
+            #     self.manual_backward(sub_loss)
+            # else :
+            #     self.manual_backward(sub_loss, retain_graph=True)
+
             opt.step1(zero_grad= True, store= store)
             store = False
+            print("Third checkpoint")
 
 
+        # STEP 2
+        print("We can come here!!!")
+        loss, perturb_output = self.shared_step(batch, "train")
+        print("Second come or not")
+        perturb_distance = torch.dist( original_output, perturb_output.detach().clone(),p= 2)
+        print("Third come or not")
+        loss = loss + self.lamda * self.rho - self.lamda * perturb_distance
+        print("Fourth come or not")
 
-        loss = self.shared_step(batch, "train")
-        self.manual_backward(loss)
+
+        self.manual_backward(loss, retain_graph=True)
         opt.step2(zero_grad= True)
-                
-        opt.zero_grad()
+        print("Last come")
         
+        # Update lamda by hand 
+        lamda_ew = self.rho - perturb_distance
+        self.lamda -= current_lr * lamda_ew
+        self.lamda = max(0, self.lamda) # ensure lamda >= 0
+
+        opt.zero_grad()
         scheduler.step()
+
+        # Log lamda
+        self.log(f"LAMDA", self.lamda.item(), on_epoch=True)
+        self.log(f"perturb_distance", perturb_distance.item(), on_epoch=True)
 
 
 
 
     def validation_step(self, batch, _):
 
-        val = self.shared_step(batch, "val")
+        val, _ = self.shared_step(batch, "val")
         return val
     
     def on_validation_epoch_end(self):
@@ -427,7 +459,9 @@ class ClassificationModel(pl.LightningModule):
         self.val_metrics["ece"].reset()
             
     def test_step(self, batch, _):
-        return self.shared_step(batch, "test")
+        test,_ = self.shared_step(batch, "test")
+        return test
+
 
     def on_test_epoch_end(self):
         """Save per-class accuracies to csv"""
