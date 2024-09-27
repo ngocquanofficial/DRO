@@ -366,9 +366,10 @@ class ClassificationModel(pl.LightningModule):
 
     def training_step(self, batch, _):
         x, y = batch
-        x, y = x.cuda(), y.cuda()
+        num_classes = y.shape[-1]
+        # x, y = x.cuda(), y.cuda()
 
-        x, y = self.mixup(x, y)
+        # x, y = self.mixup(x, y)
 
         current_lr = self.trainer.optimizers[0].param_groups[0]["lr"]
         self.log("lr", current_lr, prog_bar=True)
@@ -415,13 +416,13 @@ class ClassificationModel(pl.LightningModule):
 
         final_loss = self.loss_fn(final_output, y) - self.lamda * final_distance
 
-        self.manual_backward(final_loss, retain_graph=True)
+        self.manual_backward(final_loss)
         opt.step2(zero_grad= True)
         
 
         # Update lamda by hand 
 
-        lamda_ew = self.rho - final_distance.detach().clone()
+        lamda_ew = self.rho * torch.sqrt(num_classes) - final_distance.detach().clone()
         self.lamda = torch.clamp(self.lamda - current_lr * lamda_ew, min= 0.02)
 
 
@@ -431,9 +432,6 @@ class ClassificationModel(pl.LightningModule):
         # Log lamda
         self.log(f"LAMDA", self.lamda.item(), on_epoch=True)
         self.log(f"perturb_distance", final_distance.item(), on_epoch=True)
-
-
-
 
     def validation_step(self, batch, _):
 
