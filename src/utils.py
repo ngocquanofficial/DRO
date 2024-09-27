@@ -10,16 +10,18 @@ import statistics
 import torch.nn.functional as F
 
 def fisher_distance(pred1, pred2) :
-    prob1 = torch.nn.functional.softmax(pred1, dim=-1)
-    prob2 = torch.nn.functional.softmax(pred2, dim=-1)
 
-    log_prob1 = torch.nn.functional.log_softmax(pred1, dim=-1)
-    log_prob2 = torch.nn.functional.log_softmax(pred2, dim=-1)
+    # Make sure tensors are normalized to probability distributions (sum to 1)
+    pred1 = pred1 / pred1.sum(dim=1, keepdim=True)
+    pred2 = pred2 / pred2.sum(dim=1, keepdim=True)
 
-    kl_div1 = torch.nn.functional.kl_div(log_prob1, prob2, reduction='batchmean')
-    kl_div2 = torch.nn.functional.kl_div(log_prob2, prob1, reduction='batchmean')
+    # Calculate KL divergence between corresponding vectors in x and y
+    # Note: kl_div expects the input to be in log form
+    kl_divergence1 = F.kl_div(pred1.log(), pred2, reduction='batchmean')
+    kl_divergence2 = F.kl_div(pred2.log(), pred1, reduction='batchmean')
 
-    return 1/2 * (kl_div1 + kl_div2)
+    return 1/2 * (kl_divergence1 + kl_divergence2)
+
 
 
 
@@ -391,7 +393,7 @@ class SVGD(torch.optim.Adam):
 
 
     @torch.no_grad()
-    def step1(self, zero_grad=False, store= False):
+    def step1(self, zero_grad=False):
         """First step: Perturb particle-specific parameters using SAM logic and save the original parameters."""
         
         # Get the particle-specific gradients for all LoRA layers
@@ -416,14 +418,11 @@ class SVGD(torch.optim.Adam):
 
 
                                     # Save the original parameters for each particle and layer
-                                    if store :
-                                        self.state[p]['old_p'] = p.data.clone()
-
                                     # perturb = ( self.state[p]['velocity'] / (self.state[p]['velocity'].norm() + 1e-12) ) * (self.rho)
                                     # p.add_(perturb.view(p.data.shape))  # Apply perturbation
 
 
-                                    e_w = p.grad * lr
+                                    e_w = p.grad/ (p.grad.norm() + 1e-12 ) * (self.rho)
                                     p.add_(e_w.view(p.data.shape))
 
 
@@ -434,55 +433,34 @@ class SVGD(torch.optim.Adam):
                                 
                                 elif f"w_b.layer.{net_id}" in n:
 
-                                    # Save the original parameters for each particle and layer
-                                    if store :
-                                        self.state[p]['old_p'] = p.data.clone()
-
                                     # Normalize and rescale to make sure that norm(e_w) = rho
-                                    e_w = p.grad * lr
+                                    e_w = p.grad/ (p.grad.norm() + 1e-12 ) * (self.rho)
                                     p.add_(e_w.view(p.data.shape))
 
                             elif "proj_v" in n:
                                 if f"w_a.layer.{net_id}" in n:
 
-                                    # Save the original parameters for each particle and layer
-                                    if store :
-                                        self.state[p]['old_p'] = p.data.clone()
-
-                                    e_w = p.grad * lr
+                                    e_w = p.grad/ (p.grad.norm() + 1e-12 ) * (self.rho)
                                     p.add_(e_w.view(p.data.shape))
 
                                 elif f"w_b.layer.{net_id}" in n:
 
-                                    # Save the original parameters for each particle and layer
-                                    if store :
-                                        self.state[p]['old_p'] = p.data.clone()
-
                                     # Normalize and rescale to make sure that norm(e_w) = rho
-                                    e_w = p.grad * lr
+                                    e_w = p.grad/ (p.grad.norm() + 1e-12 ) * (self.rho)
                                     p.add_(e_w.view(p.data.shape))
-
 
                         elif 'fc' in n:
                             if 'weight' in n:
 
-                                # Save the original parameters for each particle and layer
-                                if store :
-                                    self.state[p]['old_p'] = p.data.clone()
-
                                 # Normalize and rescale to make sure that norm(e_w) = rho
-                                e_w = p.grad * lr
+                                e_w = p.grad/ (p.grad.norm() + 1e-12 ) * (self.rho)
                                 p.add_(e_w.view(p.data.shape))
                                 
 
                             elif 'bias' in n:
 
-                                # Save the original parameters for each particle and layer
-                                if store :
-                                    self.state[p]['old_p'] = p.data.clone()
-
                                 # Normalize and rescale to make sure that norm(e_w) = rho
-                                e_w = p.grad * lr
+                                e_w = p.grad/ (p.grad.norm() + 1e-12 ) * (self.rho)
                                 p.add_(e_w.view(p.data.shape))
                         # Mark this parameter as updated
                         updated_n.add(n)

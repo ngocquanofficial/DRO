@@ -5,6 +5,28 @@ log_offset = 1e-7
 
 
 
-# print(torch.nn.functional.softmax(pred3, dim= -1))
-a = torch.tensor([1.])
-print(torch.clamp(a - 2, min= 0.05))
+def fisher_distance(pred1, pred2) :
+
+    # Make sure tensors are normalized to probability distributions (sum to 1)
+    pred1 = pred1 / pred1.sum(dim=1, keepdim=True)
+    pred2 = pred2 / pred2.sum(dim=1, keepdim=True)
+
+    # Calculate KL divergence between corresponding vectors in x and y
+    # Note: kl_div expects the input to be in log form
+    kl_divergence1 = F.kl_div(pred1.log(), pred2, reduction='batchmean')
+    kl_divergence2 = F.kl_div(pred2.log(), pred1, reduction='batchmean')
+
+    return 1/2 * (kl_divergence1 + kl_divergence2)
+
+
+x = torch.rand(24, 100)
+y = x + 0.5
+
+
+distances = torch.norm(x - y, p=2, dim=1).mean()
+print(distances.shape)
+
+# Calculate the average distance
+average_distance = distances.mean().item()
+print(average_distance)
+print(fisher_distance(x, y))

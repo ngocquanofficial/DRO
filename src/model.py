@@ -392,7 +392,7 @@ class ClassificationModel(pl.LightningModule):
         perturb_loss, perturb_output = self.shared_step(batch, "train")
 
         if self.distance == "euclid" :
-            current_distance = torch.dist( perturb_output, original_output.detach().clone() ,p= 2)
+            current_distance = torch.norm( perturb_output - original_output.detach().clone() ,p= 2, dim= 1).mean()
         elif self.distance == "fisher" :
             current_distance = fisher_distance( perturb_output, original_output.detach().clone())
         else :
@@ -407,9 +407,9 @@ class ClassificationModel(pl.LightningModule):
 
         # STEP 2
         _, final_output = self.shared_step(batch, "train")
-        
+        print("shape", final_output.shape)
         if self.distance == "euclid" :
-            final_distance = torch.dist(final_output, original_output.detach().clone() ,p= 2)
+            final_distance = torch.norm(final_output - original_output.detach().clone(), p= 2, dim= 1).mean()
         else :
             final_distance = fisher_distance(final_output, original_output.detach().clone() )
 
