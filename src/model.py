@@ -392,7 +392,7 @@ class ClassificationModel(pl.LightningModule):
         if self.distance == "euclid" :
             current_distance = torch.dist( perturb_output, original_output.detach().clone() ,p= 2)
         elif self.distance == "fisher" :
-            current_distance = torch.dist( perturb_output, original_output.detach().clone())
+            current_distance = fisher_distance( perturb_output, original_output.detach().clone())
         else :
             print("SET UP DISTANCE TYPE")
         updated_loss = perturb_loss - self.lamda * current_distance
