@@ -1,5 +1,5 @@
 from typing import List, Optional, Tuple
-
+import math
 import copy
 import pandas as pd
 import numpy as np
@@ -366,10 +366,11 @@ class ClassificationModel(pl.LightningModule):
 
     def training_step(self, batch, _):
         x, y = batch
-        num_classes = y.shape[-1]
-        # x, y = x.cuda(), y.cuda()
+        x, y = x.cuda(), y.cuda()
 
-        # x, y = self.mixup(x, y)
+        x, y = self.mixup(x, y)
+
+        num_classes = y.shape[-1]
 
         current_lr = self.trainer.optimizers[0].param_groups[0]["lr"]
         self.log("lr", current_lr, prog_bar=True)
@@ -408,7 +409,6 @@ class ClassificationModel(pl.LightningModule):
 
         # STEP 2
         _, final_output = self.shared_step(batch, "train")
-        print("shape", final_output.shape)
         if self.distance == "euclid" :
             final_distance = torch.norm(final_output - original_output.detach().clone(), p= 2, dim= 1).mean()
         else :
@@ -422,7 +422,7 @@ class ClassificationModel(pl.LightningModule):
 
         # Update lamda by hand 
 
-        lamda_ew = self.rho * torch.sqrt(num_classes) - final_distance.detach().clone()
+        lamda_ew = self.rho * math.sqrt(num_classes) - final_distance.detach().clone()
         self.lamda = torch.clamp(self.lamda - current_lr * lamda_ew, min= 0.02)
 
 
