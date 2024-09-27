@@ -378,6 +378,7 @@ class ClassificationModel(pl.LightningModule):
         torch.autograd.set_detect_anomaly(True)
 
 
+        # PERTURB (same as SAM)
         loss, original_output = self.shared_step(batch, "train") 
 
         opt.zero_grad()
@@ -386,6 +387,7 @@ class ClassificationModel(pl.LightningModule):
         opt.perturb(zero_grad= True)
 
 
+        # STEP 1
 
         perturb_loss, perturb_output = self.shared_step(batch, "train")
 
@@ -420,8 +422,8 @@ class ClassificationModel(pl.LightningModule):
         # Update lamda by hand 
 
         lamda_ew = self.rho - final_distance.detach().clone()
-        self.lamda -= current_lr * lamda_ew
-        self.lamda = max(0, self.lamda) # ensure lamda >= 0
+        self.lamda = torch.clamp(self.lamda - current_lr * lamda_ew, min= 0.02)
+
 
         opt.zero_grad()
         scheduler.step()

@@ -6,7 +6,7 @@ trainer:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
       save_dir: output
-      name: cifar100-real
+      name: dtd-real-euclid
   max_epochs: 200
   # max_steps: 10000
   val_check_interval: 100
@@ -18,17 +18,17 @@ model:
   rho: 0.06
   lr: 0.12
   momentum: 0.9
-  weight_decay: 0.0
+  weight_decay: 1e-4
   scheduler: cosine
   warmup_steps: 500
   lora_r: 8
   lora_alpha: 8
   num_particles: 4
   use_sam: True
+  distance: euclid
 data:
-  dataset: cifar100
-  root: ../vtab-1k/cifar100
-  size: 224
+  dataset: dtd
+  root: ../vtab-1k/dtd
   batch_size: 64
   workers: 4
   train_aug: False

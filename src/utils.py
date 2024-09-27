@@ -423,8 +423,7 @@ class SVGD(torch.optim.Adam):
                                     # p.add_(perturb.view(p.data.shape))  # Apply perturbation
 
 
-                                    # Normalize and rescale to make sure that norm(e_w) = rho
-                                    e_w = p.grad/ (p.grad.norm() + 1e-12 ) * (self.rho)
+                                    e_w = p.grad * lr
                                     p.add_(e_w.view(p.data.shape))
 
 
@@ -440,7 +439,7 @@ class SVGD(torch.optim.Adam):
                                         self.state[p]['old_p'] = p.data.clone()
 
                                     # Normalize and rescale to make sure that norm(e_w) = rho
-                                    e_w = p.grad/ (p.grad.norm() + 1e-12 ) * (self.rho)
+                                    e_w = p.grad * lr
                                     p.add_(e_w.view(p.data.shape))
 
                             elif "proj_v" in n:
@@ -450,7 +449,7 @@ class SVGD(torch.optim.Adam):
                                     if store :
                                         self.state[p]['old_p'] = p.data.clone()
 
-                                    e_w = p.grad/ (p.grad.norm() + 1e-12 ) * (self.rho)
+                                    e_w = p.grad * lr
                                     p.add_(e_w.view(p.data.shape))
 
                                 elif f"w_b.layer.{net_id}" in n:
@@ -460,7 +459,7 @@ class SVGD(torch.optim.Adam):
                                         self.state[p]['old_p'] = p.data.clone()
 
                                     # Normalize and rescale to make sure that norm(e_w) = rho
-                                    e_w = p.grad/ (p.grad.norm() + 1e-12 ) * (self.rho)
+                                    e_w = p.grad * lr
                                     p.add_(e_w.view(p.data.shape))
 
 
@@ -472,7 +471,7 @@ class SVGD(torch.optim.Adam):
                                     self.state[p]['old_p'] = p.data.clone()
 
                                 # Normalize and rescale to make sure that norm(e_w) = rho
-                                e_w = p.grad/ (p.grad.norm() + 1e-12 ) * (self.rho)
+                                e_w = p.grad * lr
                                 p.add_(e_w.view(p.data.shape))
                                 
 
@@ -483,7 +482,7 @@ class SVGD(torch.optim.Adam):
                                     self.state[p]['old_p'] = p.data.clone()
 
                                 # Normalize and rescale to make sure that norm(e_w) = rho
-                                e_w = p.grad/ (p.grad.norm() + 1e-12 ) * (self.rho)
+                                e_w = p.grad * lr
                                 p.add_(e_w.view(p.data.shape))
                         # Mark this parameter as updated
                         updated_n.add(n)

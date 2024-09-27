@@ -15,8 +15,8 @@ model:
   model_name: vit-b16-224-dino
   training_mode: lora
   optimizer: svgd
-  rho: 0.05
-  lr: 0.15
+  rho: 0.06
+  lr: 0.12
   momentum: 0.9
   weight_decay: 1e-4
   scheduler: cosine
@@ -29,7 +29,7 @@ data:
   dataset: clevrdist
   root: ../vtab-1k/clevr_dist
   size: 224
-  batch_size: 32
+  batch_size: 64
   workers: 4
   train_aug: True
 
