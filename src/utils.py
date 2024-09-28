@@ -10,17 +10,17 @@ import statistics
 import torch.nn.functional as F
 
 def fisher_distance(pred1, pred2) :
-
     # Make sure tensors are normalized to probability distributions (sum to 1)
-    pred1 = pred1 / pred1.sum(dim=1, keepdim=True)
-    pred2 = pred2 / pred2.sum(dim=1, keepdim=True)
+    prob1 = F.softmax(pred1, dim=1)
+    prob2 = F.softmax(pred2, dim=1)
 
     # Calculate KL divergence between corresponding vectors in x and y
     # Note: kl_div expects the input to be in log form
-    kl_divergence1 = F.kl_div(pred1.log(), pred2, reduction='batchmean')
-    kl_divergence2 = F.kl_div(pred2.log(), pred1, reduction='batchmean')
-
-    return 1/2 * (kl_divergence1 + kl_divergence2)
+    kl_divergence1 = F.kl_div(torch.log(prob1 + 1e-8), prob2 + 1e-8, reduction='batchmean')
+    kl_divergence2 = F.kl_div(torch.log(prob2+ 1e-8), prob1 + 1e-8, reduction='batchmean')
+    fisher = 1/2 * (kl_divergence1 + kl_divergence2)
+    print(fisher)
+    return fisher
 
 
 

@@ -15,8 +15,8 @@ model:
   model_name: vit-b16-224-dino
   training_mode: lora
   optimizer: svgd
-  rho: 0.06
-  lr: 0.12
+  rho: 0.04
+  lr: 0.15
   momentum: 0.9
   weight_decay: 0.0
   scheduler: cosine
@@ -25,6 +25,8 @@ model:
   lora_alpha: 8
   num_particles: 4
   use_sam: True
+  distance: fisher
+  bound: 0.05
 data:
   dataset: cifar100
   root: ../vtab-1k/cifar100

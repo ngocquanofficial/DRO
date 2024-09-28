@@ -84,7 +84,8 @@ class ClassificationModel(pl.LightningModule):
         weights_path: str = 'checkpoint/B_16.pth',
         grad_loop: int = 3,
         lamda = 1,
-        distance= "fisher"
+        distance= "fisher",
+        bound= None,
     ):
         """Classification Model
 
@@ -144,6 +145,7 @@ class ClassificationModel(pl.LightningModule):
         self.grad_loop = grad_loop
         self.lamda = torch.tensor(float(lamda), requires_grad=False).to("cuda")
         self.distance = distance
+        self.bound = bound
 
         # Initialize network
         try:
@@ -422,8 +424,8 @@ class ClassificationModel(pl.LightningModule):
 
         # Update lamda by hand 
 
-        lamda_ew = self.rho * math.sqrt(num_classes) - final_distance.detach().clone()
-        self.lamda = torch.clamp(self.lamda - current_lr * lamda_ew, min= 0.02)
+        lamda_ew = self.bound - final_distance.detach().clone()
+        self.lamda = torch.clamp(self.lamda - min(current_lr, 0.04) * lamda_ew, min= 0.01)
 
 
         opt.zero_grad()

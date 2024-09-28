@@ -18,15 +18,17 @@ def fisher_distance(pred1, pred2) :
 
     return 1/2 * (kl_divergence1 + kl_divergence2)
 
+for i in range(10) :
+    x = torch.rand(24, 100)
+    y = torch.rand(24, 100)
+    # x = torch.tensor(torch.arange(9).reshape(3, 3), dtype= torch.float32)
+    # y =  torch.tensor(torch.arange(9).reshape(3, 3), dtype= torch.float32)
 
-x = torch.rand(24, 100)
-y = x + 0.5
 
+    distances = torch.norm(x - y, p=2, dim=1).mean()
+    print(distances.shape)
 
-distances = torch.norm(x - y, p=2, dim=1).mean()
-print(distances.shape)
-
-# Calculate the average distance
-average_distance = distances.mean().item()
-print(average_distance)
-print(fisher_distance(x, y))
+    # Calculate the average distance
+    average_distance = distances.mean().item()
+    print(average_distance)
+    print(fisher_distance(x, y))
