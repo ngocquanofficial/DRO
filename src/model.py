@@ -8,7 +8,7 @@ import torch
 import torch.nn.functional as F
 from peft import LoraConfig, get_peft_model
 from torch.optim import SGD, Adam, AdamW
-from .utils import SVGD, RBF
+from .utils import DRO
 from torch.optim.lr_scheduler import LambdaLR
 from torch.optim.swa_utils import AveragedModel, SWALR
 from torch.optim.lr_scheduler import CosineAnnealingLR
@@ -22,10 +22,11 @@ import timm
 
 from src.loss import SoftTargetCrossEntropy
 from src.mixup import Mixup
-from .utils import block_expansion
+
 from .lora import LoRA_ViT
 from .base_vit2 import ViT, CustomLinear, CustomLinear2
 from .swag import SWAG, bn_update
+from src.utils import log_det, fisher_distance, cal_cosine_similarity
 # from .base_vit import ViT, CustomLinear
 
 torch.autograd.set_detect_anomaly(True)
@@ -88,7 +89,14 @@ class ClassificationModel(pl.LightningModule):
         swa_freq: int = 10,
         use_swa_svgd: bool = False,
         use_sym_kl: bool = False,
-        sigma = 1
+        sigma = 1,
+
+        # DRO
+        grad_loop: int = 3,
+        lamda = 1,
+        distance= "fisher",
+        bound= None,
+
     ):
         """Classification Model
 
@@ -153,6 +161,15 @@ class ClassificationModel(pl.LightningModule):
         self.use_swa_svgd =  use_swa_svgd
         self.use_sym_kl = use_sym_kl
         self.sigma = sigma
+
+
+        #DRO
+        self.grad_loop = grad_loop
+        self.lamda = torch.tensor(float(lamda), requires_grad=False).to("cuda")
+        self.distance = distance
+        self.bound = bound
+
+
         # Initialize network
         try:
             model_path = MODEL_DICT[self.model_name]
@@ -176,7 +193,7 @@ class ClassificationModel(pl.LightningModule):
                 image_size=self.image_size,
             )
             
-            if self.optimizer in ['svgd', "deep_ens", 'SWAG', "flat_seeking"]:
+            if self.optimizer in ['svgd', "deep_ens", 'SWAG', "flat_seeking", 'dro']:
                 print('Model name', self.model_name)
                 # self.net = ViT(name='B_16_imagenet1k', pretrained=True, num_classes=self.n_classes, image_size=self.image_size, num_particles=self.num_particles)
                 self.net = ViT(name='vit-b16-224-in21k', pretrained=True, num_classes=self.n_classes, image_size=self.image_size, num_particles=self.num_particles, weight_path=weights_path)
@@ -216,7 +233,7 @@ class ClassificationModel(pl.LightningModule):
                 bias=self.lora_bias,
                 modules_to_save=["classifier"],
             )
-            if self.optimizer not in ['svgd', "deep_ens", 'SWAG', 'flat_seeking']:
+            if self.optimizer not in ['svgd', "deep_ens", 'SWAG', 'flat_seeking', 'dro']:
                 self.net = get_peft_model(self.net, config)
             else: #init multiple net @@ corresponding to different particles
                 
@@ -263,6 +280,7 @@ class ClassificationModel(pl.LightningModule):
                 f"{self.training_mode} is not an available fine-tuning mode. Should be one of ['full', 'linear', 'lora']"
             )
 
+
         # Define metrics
         self.train_metrics = MetricCollection(
             {
@@ -272,7 +290,7 @@ class ClassificationModel(pl.LightningModule):
                     task="multiclass",
                     top_k=min(5, self.n_classes),
                 ),
-                "ece": CalibrationError(num_classes=self.n_classes, norm='l1')
+                # "ece": CalibrationError(num_classes=self.n_classes, norm='l1').to("cpu")
             }
         )
         self.val_metrics = MetricCollection(
@@ -283,7 +301,7 @@ class ClassificationModel(pl.LightningModule):
                     task="multiclass",
                     top_k=min(5, self.n_classes),
                 ),
-                "ece": CalibrationError(num_classes=self.n_classes, norm='l1')
+                "ece": CalibrationError(num_classes=self.n_classes, norm='l1').to("cpu")
             }
         )
         self.test_metrics = MetricCollection(
@@ -294,7 +312,7 @@ class ClassificationModel(pl.LightningModule):
                     task="multiclass",
                     top_k=min(5, self.n_classes),
                 ),
-                "ece": CalibrationError(num_classes=self.n_classes, norm='l1'),
+                "ece": CalibrationError(num_classes=self.n_classes, norm='l1').to("cpu"),
                 "stats": StatScores(
                     task="multiclass", average=None, num_classes=self.n_classes
                 ),
@@ -316,17 +334,27 @@ class ClassificationModel(pl.LightningModule):
 
         self.test_metric_outputs = []
         
-        if self.optimizer in ['svgd', 'deep_ens', 'SWAG', 'flat_seeking']:
+        if self.optimizer in ['svgd', 'deep_ens', 'SWAG', 'flat_seeking', 'dro']:
             self.automatic_optimization = False
 
     def forward(self, x):
-        if self.optimizer not in ['svgd', 'deep_ens', 'SWAG', 'flat_seeking']:
+        if self.optimizer not in ['svgd', 'deep_ens', 'SWAG', 'flat_seeking', 'dro']:
             return self.net(x).logits
         else:
             res = self.net(x)
             return res
-        
-    def shared_step(self, batch, mode="train"):
+
+
+    def compute_pred(self, pred) :
+
+        pred_ = 0 #final_prediction
+        for j in range(self.num_particles):
+            pred_ = pred_ + pred[j]
+        pred_ = pred_/max(1, self.num_particles)
+
+        return pred_
+
+    def shared_step(self, batch, mode="train", logging= True):
         x, y = batch
         x, y = x.cuda(), y.cuda()
 
@@ -336,186 +364,113 @@ class ClassificationModel(pl.LightningModule):
         else:
             y = F.one_hot(y, num_classes=self.n_classes).float()
 
+
+        pred = self(x) # List containing model predictions
+
+        pred_ = 0 #final_prediction
+        for j in range(self.num_particles):
+            pred_ = pred_ + pred[j]
+        pred_ = pred_/max(1, self.num_particles)
+        entropy_loss = self.loss_fn(pred_, y)
+
+        prob_pred = [torch.nn.functional.softmax(i, dim= -1) for i in pred]
+        div_loss = - log_det(y, prob_pred, self.num_particles).to(pred[0].device)
+        # ensemble_loss = ensemble_entropy(y, prob_pred, self.num_particles)
+
+        loss = entropy_loss  + 0.1 * div_loss
         
-        if self.optimizer not in ['svgd', 'deep_ens', 'SWAG', 'flat_seeking']:
-            # Pass through network
+        # Get accuracy
+        metrics = getattr(self, f"{mode}_metrics")(pred_, y.argmax(1))
 
-            pred = self(x)
-            loss = self.loss_fn(pred, y)
-            # Get accuracy
-            metrics = getattr(self, f"{mode}_metrics")(pred, y.argmax(1))
-        elif self.optimizer == 'deep_ens' and mode == "train":
-            
-            scaled_epsilon = self.epsilon * (x.max() - x.min())
-
-            # force inputs to require gradient
-            inputs = x.clone()
-            inputs.requires_grad = True
-            
-            # standard forwards pass
-            pred = self(inputs)
-                                
-            pred_ = 0 #pred
-            for j in range(self.num_particles):
-                pred_ = pred_ + pred[j]
-            pred_ = pred_/max(1, self.num_particles)
-            loss = self.loss_fn(pred_, y)
-            
-            # now compute gradients wrt input
-            self.optimizers().zero_grad()
-            self.manual_backward(loss) #, retain_graph=True)
-            # now compute sign of gradients
-            inputs_grad = torch.sign(inputs.grad)
-
-            # perturb inputs and use clamped output
-            inputs_perturbed = torch.clamp(
-                inputs + scaled_epsilon * inputs_grad, 0.0, 1.0
-            ).detach()
-            inputs.grad.zero_()
-            
-            inputs_all = torch.cat((inputs, inputs_perturbed), dim=0)
-            outputs_all = self(inputs_all)
-
-            # compute adversarial version of loss
-            pred_p = 0 #pred
-            for j in range(self.num_particles):
-                pred_p = pred_p + outputs_all[j]
-            pred_p = pred_p/max(1, self.num_particles)
-            final_loss = (self.loss_fn(pred_p[:y.shape[0]], y) + self.loss_fn(pred_p[y.shape[0]:], y))/2.0
-            
-            loss = final_loss
-            
-            # Get accuracy
-            metrics = getattr(self, f"{mode}_metrics")(pred_, y.argmax(1))
-
-        else:
-            pred = self(x)
-            pred_ = 0 #pred
-            for j in range(self.num_particles):
-                pred_ = pred_ + pred[j]
-            pred_ = pred_/max(1, self.num_particles)
-            loss = self.loss_fn(pred_, y)
-            
-            # Get accuracy
-            metrics = getattr(self, f"{mode}_metrics")(pred_, y.argmax(1))
 
         # Log
-        self.log(f"{mode}_loss", loss.item(), on_epoch=True)
-        for k, v in metrics.items():
-            if len(v.size()) == 0:
-                self.log(f"{mode}_{k.lower()}", v, on_epoch=True)
+        if logging :
+            self.log(f"{mode}_DIV_LOSS", div_loss.item(), on_epoch=True)
+            self.log(f"{mode}_loss", loss.item(), on_epoch=True)
+            for k, v in metrics.items():
+                if len(v.size()) == 0:
+                    self.log(f"{mode}_{k.lower()}", v, on_epoch=True)
+
 
         if mode == "test":
             self.test_metric_outputs.append(metrics["stats"])
-            
-        return loss
+        
+        return loss, pred
+
+
 
     def training_step(self, batch, _):
-        if self.optimizer == 'svgd':
-            self.log("lr", self.trainer.optimizers[0].param_groups[0]["lr"], prog_bar=True)
-            opt = self.optimizers()
-            scheduler = self.lr_schedulers()
-            
-            torch.autograd.set_detect_anomaly(True)
 
-            loss = self.shared_step(batch, "train")
-            
-            opt.zero_grad()
-            self.manual_backward(loss)
+        current_lr = self.trainer.optimizers[0].param_groups[0]["lr"]
+        self.log("lr", current_lr, prog_bar=True)
 
-            # for sam
-            if self.use_sam:
-                if not self.use_sym_kl:
-                    org_weight_tuple, kernel_tuple = opt.step1()
-                    loss = self.shared_step(batch, "train")
-                    opt.zero_grad()
-                    self.manual_backward(loss)
-                    opt.step2(org_weight_tuple, kernel_tuple)
-                else:
-                    # get grad of logP (org model)
-                    grad_tuple = opt.get_grad1()
-                    
-                    # get grad of sym_kernel (org model)
-                    outputs = self(batch) # list of outputs of particles
-                    org_weight_tuple, kernel_tuple = opt.step1_symKL(grad_tuple, outputs)
-                    
-                    # real update..
-                    loss = self.shared_step(batch, "train")
-                    opt.zero_grad()
-                    self.manual_backward(loss)
-                    opt.step2(org_weight_tuple, kernel_tuple)
-                    
-            else:
-                opt.step_()
-            opt.zero_grad()
-            
-            if self.global_step > self.start_swag_step and (self.global_step + 1 - self.start_swag_step) % self.swa_freq == 0:
-                self.swa_model.update_parameters(self.net)
-                self.swa_scheduler.step()
-            else:
-                scheduler.step()
-            # return loss
-        elif self.optimizer == 'SWAG':
-            self.log("lr", self.trainer.optimizers[0].param_groups[0]["lr"], prog_bar=True)
-            opt = self.optimizers()
-            scheduler = self.lr_schedulers()
-            loss = self.shared_step(batch, "train")
-                
-            opt.zero_grad()
-            self.manual_backward(loss)
-            opt.step()
-            scheduler.step()
-            
-            if self.global_step > self.start_swag_step and (self.global_step + 1 - self.start_swag_step) % self.swa_freq == 0:
-                self.swag.collect_model(self.net)
-
-        elif self.optimizer == 'flat_seeking':
-            self.log("lr", self.trainer.optimizers[0].param_groups[0]["lr"], prog_bar=True)
-            opt = self.optimizers()
-            scheduler = self.lr_schedulers()
-            torch.autograd.set_detect_anomaly(True)
-            loss = self.shared_step(batch, "train")
-                
-
-            opt.zero_grad()
-            self.manual_backward(loss)
-            opt.first_step(zero_grad= True)
-            
-            loss = self.shared_step(batch, "train")
-
-            self.manual_backward(loss)
-            opt.second_step(zero_grad= True)
+        opt = self.optimizers()
+        scheduler = self.lr_schedulers()
+        torch.autograd.set_detect_anomaly(True)
 
 
-            opt.zero_grad()
-            scheduler.step()
+        # PERTURB (same as SAM)
+        loss, original_pred = self.shared_step(batch, "train")
+        original_output = self.compute_pred(original_pred) 
+
+        opt.zero_grad()
+        self.manual_backward(loss)
+
+        opt.perturb(zero_grad= True)
 
 
-            
-            if self.global_step > self.start_swag_step and (self.global_step + 1 - self.start_swag_step) % self.swa_freq == 0:
-                self.swag.collect_model(self.net)
-                
-                
-        else:
-            opt = self.optimizers()
-            scheduler = self.lr_schedulers()
-            loss = self.shared_step(batch, "train")
-            
-            opt.zero_grad()
-            self.manual_backward(loss)
-            opt.step()
-            scheduler.step()
-            
-            self.log("lr", self.trainer.optimizers[0].param_groups[0]["lr"], prog_bar=True)
-            # return self.shared_step(batch, "train")
+        # STEP 1
+
+        perturb_loss, perturb_pred = self.shared_step(batch, "train")
+        perturb_output = self.compute_pred(perturb_pred)
+
+        if self.distance == "euclid" :
+            current_distance = torch.norm( perturb_output - original_output.detach().clone() ,p= 2, dim= 1).mean()
+        elif self.distance == "fisher" :
+            current_distance = fisher_distance( perturb_output, original_output.detach().clone())
+        else :
+            print("SET UP DISTANCE TYPE")
+
+        perturb_loss = perturb_loss - self.lamda * current_distance
+        opt.zero_grad()
+        self.manual_backward(perturb_loss)
+
+        opt.step1(zero_grad= True)
+
+
+
+        # STEP 2
+        final_loss, final_pred = self.shared_step(batch, "train")
+        final_output = self.compute_pred(final_pred)
+    
+        if self.distance == "euclid" :
+            final_distance = torch.norm(final_output - original_output.detach(), p= 2, dim= 1).mean()
+        elif self.distance == 'fisher':
+            final_distance = fisher_distance(final_output, original_output.detach())
+        else :
+            print("ERROR distance")
+
+        final_loss = final_loss - self.lamda * final_distance
+
+        self.manual_backward(final_loss)
+        opt.step2(zero_grad= True)
+        
+
+        # Update lamda by hand 
+
+        lamda_ew = self.bound - final_distance.detach().clone()
+        self.lamda = torch.clamp(self.lamda - current_lr * lamda_ew, min= 0.01)
+
+
+        opt.zero_grad()
+        scheduler.step()
+
+        # Log lamda
+        self.log(f"LAMDA", self.lamda.item(), on_epoch=True)
+        self.log(f"perturb_distance", final_distance.item(), on_epoch=True)
+
 
     def validation_step(self, batch, _):
-        if self.optimizer == 'SWAG' or self.optimizer == 'flat_seeking':
-            self.swag.sample(0.0)
-            bn_update(batch, self.swag)
-            
-        elif self.optimizer == 'svgd' and self.use_swa_svgd:
-            torch.optim.swa_utils.update_bn(batch, self.swa_model)
         val = self.shared_step(batch, "val")
         # self.test_step(batch, _)
         return val
@@ -548,52 +503,20 @@ class ClassificationModel(pl.LightningModule):
 
     def configure_optimizers(self):
         # Initialize optimizer
-        if self.optimizer == "adam":
-            optimizer = Adam(
-                self.net.parameters(),
-                lr=self.lr,
-                betas=self.betas,
-                weight_decay=self.weight_decay,
-            )
-        elif self.optimizer == "adamw":
-            optimizer = AdamW(
-                self.net.parameters(),
-                lr=self.lr,
-                betas=self.betas,
-                weight_decay=self.weight_decay,
-            )
-        elif self.optimizer in ["sgd", 'deep_ens']:
-            optimizer = SGD(
-                self.net.parameters(),
-                lr=self.lr,
-                momentum=self.momentum,
-                weight_decay=self.weight_decay,
-            )
-        elif self.optimizer == 'SWAG' or self.optimizer == 'flat_seeking' :
-            # print(self.net.parameters())
-            optimizer = SGD(
-                self.net.parameters(),
-                lr=self.lr,
-                momentum=self.momentum,
-                weight_decay=self.weight_decay,
-            )
-        elif self.optimizer == "svgd":  #use Adam as the base optimizer by default @@        
-            optimizer =  SVGD(
-                param = self.net.parameters(), 
-                rho=self.rho,
-                sigma=self.sigma, 
-                lr=self.lr, 
-                betas=self.betas,
-                weight_decay=self.weight_decay, 
-                num_particles=self.num_particles, 
-                train_module=self, 
-                net=self.net, 
-                use_sym_kl=self.use_sym_kl
-                )
+
+        if self.optimizer == "dro":  #use Adam as the base optimizer by default @@        
+            base_optimizer = torch.optim.SGD
+
+            optimizer =  DRO(param = self.net.parameters(),base_optimizer= base_optimizer, lr=self.lr, betas=self.betas,
+                weight_decay=self.weight_decay, num_particles=self.num_particles, train_module=self, net=self.net, rho= self.rho)
+
         else:
             raise ValueError(
                 f"{self.optimizer} is not an available optimizer. Should be one of ['adam', 'adamw', 'sgd', 'deepEns']"
             )
+
+
+
 
         # Initialize learning rate scheduler
         if self.optimizer == 'svgd' and self.use_swa_svgd:
