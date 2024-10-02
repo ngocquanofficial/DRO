@@ -1,6 +1,6 @@
 #!/bin/bash -e
 
-#SBATCH --job-name=flowers102_deepEns # create a short name for your job
+#SBATCH --job-name=cifar100 # create a short name for your job
 #SBATCH --output=/lustre/scratch/client/vinai/users/quanpn2/Bayesian_finetuning/sbatch_results/mbpp%A.out # create a output file
 #SBATCH --error=/lustre/scratch/client/vinai/users/quanpn2/Bayesian_finetuning/sbatch_results/mbpp%A.err # create a error file
 #SBATCH --partition=research # choose partition
@@ -26,4 +26,4 @@ eval "$(conda shell.bash hook)"
 conda activate /lustre/scratch/client/vinai/users/quanpn2/angry
 
 # Run Python script
-python main.py fit --config configs/lora/vtab_flowers102-r16-lr0.05_deepEns.yaml
+python main.py fit --config configs/dro/cifar100.yaml
