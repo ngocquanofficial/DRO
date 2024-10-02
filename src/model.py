@@ -178,27 +178,20 @@ class ClassificationModel(pl.LightningModule):
                 f"{model_name} is not an available model. Should be one of {[k for k in MODEL_DICT.keys()]}"
             )
 
-        if self.from_scratch:
-            # Initialize with random weights
-            config = AutoConfig.from_pretrained(model_path)
-            config.image_size = self.image_size
-            self.net = AutoModelForImageClassification.from_config(config)
-            self.net.classifier = torch.nn.Linear(config.hidden_size, self.n_classes)
-        else:
-            # Initialize with pretrained weights
-            self.net = AutoModelForImageClassification.from_pretrained(
-                model_path,
-                num_labels=self.n_classes,
-                ignore_mismatched_sizes=True,
-                image_size=self.image_size,
-            )
-            
-            if self.optimizer in ['svgd', "deep_ens", 'SWAG', "flat_seeking", 'dro']:
-                print('Model name', self.model_name)
-                # self.net = ViT(name='B_16_imagenet1k', pretrained=True, num_classes=self.n_classes, image_size=self.image_size, num_particles=self.num_particles)
-                self.net = ViT(name='vit-b16-224-in21k', pretrained=True, num_classes=self.n_classes, image_size=self.image_size, num_particles=self.num_particles, weight_path=weights_path)
-                
-                self.net = self.net.cuda()
+        # # Initialize with pretrained weights
+        # self.net = AutoModelForImageClassification.from_pretrained(
+        #     model_path,
+        #     num_labels=self.n_classes,
+        #     ignore_mismatched_sizes=True,
+        #     image_size=self.image_size,
+        # )
+        
+        # if self.optimizer in ['svgd', "deep_ens", 'SWAG', "flat_seeking", 'dro']:
+        print('Model name', self.model_name)
+        # self.net = ViT(name='B_16_imagenet1k', pretrained=True, num_classes=self.n_classes, image_size=self.image_size, num_particles=self.num_particles)
+        self.net = ViT(name='vit-b16-224-in21k', pretrained=True, num_classes=self.n_classes, image_size=self.image_size, num_particles=self.num_particles, weight_path=weights_path)
+        
+        self.net = self.net.cuda()
                 
 
         # Load checkpoint weights
@@ -216,13 +209,8 @@ class ClassificationModel(pl.LightningModule):
             self.net.load_state_dict(new_state_dict, strict=True)
             
 
-        # Prepare model depending on fine-tuning mode
-        if self.training_mode == "linear":
-            # Freeze transformer layers and keep classifier unfrozen
-            for name, param in self.net.named_parameters():
-                if "classifier" not in name:
-                    param.requires_grad = False
-        elif self.training_mode == "lora":
+
+        if self.training_mode == "lora":
             
             # Wrap in LoRA model
             config = LoraConfig(
@@ -233,48 +221,10 @@ class ClassificationModel(pl.LightningModule):
                 bias=self.lora_bias,
                 modules_to_save=["classifier"],
             )
-            if self.optimizer not in ['svgd', "deep_ens", 'SWAG', 'flat_seeking', 'dro']:
-                self.net = get_peft_model(self.net, config)
-            else: #init multiple net @@ corresponding to different particles
+
+            self.net = LoRA_ViT(num_particles=self.num_particles, vit_model=self.net, r=self.lora_r, alpha=self.lora_alpha, num_classes=self.n_classes)
                 
-                self.net = LoRA_ViT(num_particles=self.num_particles, vit_model=self.net, r=self.lora_r, alpha=self.lora_alpha, num_classes=self.n_classes)
-                if self.optimizer == 'svgd' and self.use_swa_svgd:
-                    self.swa_model = AveragedModel(self.net)
-                    
-                if self.optimizer == 'SWAG' or self.optimizer == 'flat_seeking':
-                    self.swag = SWAG(base=self.net,no_cov_mat=not self.cov_mat, max_num_models=self.max_num_models)
-                
-                    
-        elif self.training_mode == "block":
-            
-            config = AutoConfig.from_pretrained(model_path)
-            config.image_size = self.image_size
 
-            print('Number of Layers: ', config.num_hidden_layers)
-
-            ckpt = self.net.state_dict()
-            output, selected_layers = block_expansion(ckpt,
-                                                      split,
-                                                      config.num_hidden_layers)
-            
-            print('Selected Layers: ', selected_layers)
-
-            config.num_hidden_layers += len(selected_layers)
-            config.num_labels = self.n_classes
-
-            self.net = AutoModelForImageClassification.from_config(config)
-            self.net.load_state_dict(output)
-
-            self.net.requires_grad_(False)
-            for n, p in self.net.named_parameters():
-                for idx in selected_layers:
-                    if 'layer.' + str(idx) + '.' in n:
-                        p.requires_grad_(True)
-
-            self.net.classifier = torch.nn.Linear(config.hidden_size, self.n_classes)
-
-        elif self.training_mode == "full":
-            pass  # Keep all layers unfrozen
         else:
             raise ValueError(
                 f"{self.training_mode} is not an available fine-tuning mode. Should be one of ['full', 'linear', 'lora']"
@@ -285,33 +235,33 @@ class ClassificationModel(pl.LightningModule):
         self.train_metrics = MetricCollection(
             {
                 "acc": Accuracy(num_classes=self.n_classes, task="multiclass", top_k=1),
-                "acc_top5": Accuracy(
-                    num_classes=self.n_classes,
-                    task="multiclass",
-                    top_k=min(5, self.n_classes),
-                ),
+                # "acc_top5": Accuracy(
+                #     num_classes=self.n_classes,
+                #     task="multiclass",
+                #     top_k=min(5, self.n_classes),
+                # ),
                 # "ece": CalibrationError(num_classes=self.n_classes, norm='l1').to("cpu")
             }
         )
         self.val_metrics = MetricCollection(
             {
                 "acc": Accuracy(num_classes=self.n_classes, task="multiclass", top_k=1),
-                "acc_top5": Accuracy(
-                    num_classes=self.n_classes,
-                    task="multiclass",
-                    top_k=min(5, self.n_classes),
-                ),
+                # "acc_top5": Accuracy(
+                #     num_classes=self.n_classes,
+                #     task="multiclass",
+                #     top_k=min(5, self.n_classes),
+                # ),
                 "ece": CalibrationError(num_classes=self.n_classes, norm='l1').to("cpu")
             }
         )
         self.test_metrics = MetricCollection(
             {
                 "acc": Accuracy(num_classes=self.n_classes, task="multiclass", top_k=1),
-                "acc_top5": Accuracy(
-                    num_classes=self.n_classes,
-                    task="multiclass",
-                    top_k=min(5, self.n_classes),
-                ),
+                # "acc_top5": Accuracy(
+                #     num_classes=self.n_classes,
+                #     task="multiclass",
+                #     top_k=min(5, self.n_classes),
+                # ),
                 "ece": CalibrationError(num_classes=self.n_classes, norm='l1').to("cpu"),
                 "stats": StatScores(
                     task="multiclass", average=None, num_classes=self.n_classes
@@ -334,15 +284,16 @@ class ClassificationModel(pl.LightningModule):
 
         self.test_metric_outputs = []
         
-        if self.optimizer in ['svgd', 'deep_ens', 'SWAG', 'flat_seeking', 'dro']:
-            self.automatic_optimization = False
+        # if self.optimizer in ['svgd', 'deep_ens', 'SWAG', 'flat_seeking', 'dro']:
+        self.automatic_optimization = False
 
     def forward(self, x):
-        if self.optimizer not in ['svgd', 'deep_ens', 'SWAG', 'flat_seeking', 'dro']:
-            return self.net(x).logits
-        else:
-            res = self.net(x)
-            return res
+        # if self.optimizer not in ['svgd', 'deep_ens', 'SWAG', 'flat_seeking', 'dro']:
+        #     return self.net(x).logits
+        # else:
+        
+        res = self.net(x)
+        return res
 
 
     def compute_pred(self, pred) :
@@ -421,7 +372,7 @@ class ClassificationModel(pl.LightningModule):
 
         # STEP 1
 
-        perturb_loss, perturb_pred = self.shared_step(batch, "train")
+        perturb_loss, perturb_pred = self.shared_step(batch, "train", logging= False)
         perturb_output = self.compute_pred(perturb_pred)
 
         if self.distance == "euclid" :
@@ -440,7 +391,7 @@ class ClassificationModel(pl.LightningModule):
 
 
         # STEP 2
-        final_loss, final_pred = self.shared_step(batch, "train")
+        final_loss, final_pred = self.shared_step(batch, "train", logging = False)
         final_output = self.compute_pred(final_pred)
     
         if self.distance == "euclid" :
@@ -519,10 +470,8 @@ class ClassificationModel(pl.LightningModule):
 
 
         # Initialize learning rate scheduler
-        if self.optimizer == 'svgd' and self.use_swa_svgd:
-            scheduler = CosineAnnealingLR(optimizer, T_max=100)
-            self.swa_scheduler = SWALR(optimizer, swa_lr=0.05)
-        elif self.scheduler == "cosine":
+
+        if self.scheduler == "cosine":
             scheduler = get_cosine_schedule_with_warmup(
                 optimizer,
                 num_training_steps=int(self.trainer.estimated_stepping_batches),
