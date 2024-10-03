@@ -348,7 +348,7 @@ class ClassificationModel(pl.LightningModule):
         if mode == "test":
             self.test_metric_outputs.append(metrics["stats"])
         
-        return loss, pred
+        return loss, pred_
 
 
 
@@ -362,50 +362,26 @@ class ClassificationModel(pl.LightningModule):
         torch.autograd.set_detect_anomaly(True)
 
 
-        # PERTURB (same as SAM)
-        loss, original_pred = self.shared_step(batch, "train")
-        original_output = self.compute_pred(original_pred) 
+        # STEP 1 (same as SAM)
+        loss, original_output = self.shared_step(batch, "train")
+        # original_output = self.compute_pred(original_pred) 
 
         opt.zero_grad()
         self.manual_backward(loss)
 
-        opt.perturb(zero_grad= True)
-
-
-        # STEP 1
-
-        perturb_loss, perturb_pred = self.shared_step(batch, "train", logging= False)
-        perturb_output = self.compute_pred(perturb_pred)
-
-        if self.distance == "euclid" :
-            current_distance = torch.norm( perturb_output - original_output.detach().clone() ,p= 2, dim= 1).mean()
-        elif self.distance == "fisher" :
-            current_distance = fisher_distance( perturb_output, original_output.detach().clone())
-        elif self.distance == "wasserstein" :
-            current_distance = wasserstein_distance(perturb_output, original_output.detach().clone())
-        else :
-            print("SET UP DISTANCE TYPE")
-
-        perturb_loss = perturb_loss - self.lamda * current_distance
-        opt.zero_grad()
-        self.manual_backward(perturb_loss)
-
-        opt.step1(zero_grad= True)
-
+        opt.step1(lamda= self.lamda, zero_grad= True)
 
 
         # STEP 2
-        final_loss, final_pred = self.shared_step(batch, "train", logging = False)
-        final_output = self.compute_pred(final_pred)
+        final_loss, final_output = self.shared_step(batch, "train", logging = False)
+        # final_output = self.compute_pred(final_pred)
     
         if self.distance == "euclid" :
-            final_distance = torch.norm(final_output - original_output.detach(), p= 2, dim= 1).mean()
+            final_distance = torch.norm(final_output.detach() - original_output.detach(), p= 2, dim= 1).mean()
         elif self.distance == 'fisher':
-            final_distance = fisher_distance(final_output, original_output.detach())
+            final_distance = fisher_distance(final_output.detach(), original_output.detach())
         else :
             print("ERROR distance")
-
-        final_loss = final_loss - self.lamda * final_distance
 
         self.manual_backward(final_loss)
         opt.step2(zero_grad= True)

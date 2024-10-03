@@ -7,7 +7,7 @@ import torch.nn.functional
 import torch.nn.functional as F
 import torch.optim as optim
 from scipy.spatial.distance import pdist, squareform
-  
+import torch.linalg as linalg
 
 def fisher_distance(pred1, pred2) :
     # Make sure tensors are normalized to probability distributions (sum to 1)
@@ -22,7 +22,51 @@ def fisher_distance(pred1, pred2) :
     return fisher
 
 
+def wasserstein_distance(X, Y):
+    '''
+    Calulates the two components of the 2-Wasserstein metric:
+    The general formula is given by: d(P_X, P_Y) = min_{X, Y} E[|X-Y|^2]
+    For multivariate gaussian distributed inputs z_X ~ MN(mu_X, cov_X) and z_Y ~ MN(mu_Y, cov_Y),
+    this reduces to: d = |mu_X - mu_Y|^2 - Tr(cov_X + cov_Y - 2(cov_X * cov_Y)^(1/2))
+    Fast method implemented according to following paper: https://arxiv.org/pdf/2009.14075.pdf
+    Input shape: [b, n] (e.g. batch_size x num_features)
+    Output shape: scalar
+    '''
 
+    if X.shape != Y.shape:
+        raise ValueError("Expecting equal shapes for X and Y!")
+
+    # the linear algebra ops will need some extra precision -> convert to double
+    X, Y = X.transpose(0, 1).double(), Y.transpose(0, 1).double()  # [n, b]
+    mu_X, mu_Y = torch.mean(X, dim=1, keepdim=True), torch.mean(Y, dim=1, keepdim=True)  # [n, 1]
+    n, b = X.shape
+    fact = 1.0 if b < 2 else 1.0 / (b - 1)
+
+    # Cov. Matrix
+    E_X = X - mu_X
+    E_Y = Y - mu_Y
+    cov_X = torch.matmul(E_X, E_X.t()) * fact  # [n, n]
+    cov_Y = torch.matmul(E_Y, E_Y.t()) * fact
+
+    # calculate Tr((cov_X * cov_Y)^(1/2)). with the method proposed in https://arxiv.org/pdf/2009.14075.pdf
+    # The eigenvalues for M are real-valued.
+    C_X = E_X * math.sqrt(fact)  # [n, n], "root" of covariance
+    C_Y = E_Y * math.sqrt(fact)
+    M_l = torch.matmul(C_X.t(), C_Y)
+    M_r = torch.matmul(C_Y.t(), C_X)
+    M = torch.matmul(M_l, M_r)
+    S = linalg.eigvals(M) + 1e-15  # add small constant to avoid infinite gradients from sqrt(0)
+    sq_tr_cov = S.sqrt().abs().sum()
+
+    # plug the sqrt_trace_component into Tr(cov_X + cov_Y - 2(cov_X * cov_Y)^(1/2))
+    trace_term = torch.trace(cov_X + cov_Y) - 2.0 * sq_tr_cov  # scalar
+
+    # |mu_X - mu_Y|^2
+    diff = mu_X - mu_Y  # [n, 1]
+    mean_term = torch.sum(torch.mul(diff, diff))  # scalar
+
+    # put it together
+    return (trace_term + mean_term).float()
 
 def log_det(y_true, pred, num_models):
     mask_non_y_true = ~y_true.bool()  
@@ -232,7 +276,7 @@ class DRO(torch.optim.Adam):
 
 
     @torch.no_grad()
-    def perturb(self, zero_grad=False):
+    def step1(self, lamda, zero_grad=False):
         """First step: Perturb particle-specific parameters using SAM logic and save the original parameters."""
         
         # Get the particle-specific gradients for all LoRA layers
@@ -241,7 +285,7 @@ class DRO(torch.optim.Adam):
         # Create a set to keep track of the updated parameters
         updated_n = set()
         lr = self.param_groups[0]['lr']
-        perturb_len = (torch.rand(1) * self.rho).to("cuda")  # random from [0, self.rho) 
+
 
 
         for net_id in range(self.num_particles):
@@ -257,26 +301,26 @@ class DRO(torch.optim.Adam):
                                 if f"w_a.layer.{net_id}" in n:
 
                                     self.state[p]['old_p'] = p.data.clone()
-                                    e_w = p.grad/ (p.grad.norm() + 1e-12 ) * (perturb_len)
+                                    e_w = p.grad / (2 * lamda)
                                     p.add_(e_w.view(p.data.shape))
                                 
                                 elif f"w_b.layer.{net_id}" in n:
 
                                     self.state[p]['old_p'] = p.data.clone()
-                                    e_w = p.grad/ (p.grad.norm() + 1e-12 ) * (perturb_len)
+                                    e_w = p.grad / (2 * lamda)
                                     p.add_(e_w.view(p.data.shape))
 
                             elif "proj_v" in n:
                                 if f"w_a.layer.{net_id}" in n:
 
                                     self.state[p]['old_p'] = p.data.clone()
-                                    e_w = p.grad/ (p.grad.norm() + 1e-12 ) * (perturb_len)
+                                    e_w = p.grad / (2 * lamda)
                                     p.add_(e_w.view(p.data.shape))
 
                                 elif f"w_b.layer.{net_id}" in n:
 
                                     self.state[p]['old_p'] = p.data.clone()
-                                    e_w = p.grad/ (p.grad.norm() + 1e-12 ) * (perturb_len)
+                                    e_w = p.grad / (2 * lamda)
                                     p.add_(e_w.view(p.data.shape))
 
 
@@ -284,94 +328,14 @@ class DRO(torch.optim.Adam):
                             if 'weight' in n:
 
                                 self.state[p]['old_p'] = p.data.clone()
-                                e_w = p.grad/ (p.grad.norm() + 1e-12 ) * (perturb_len)
+                                e_w = p.grad / (2 * lamda)
                                 p.add_(e_w.view(p.data.shape))
                                 
 
                             elif 'bias' in n:
                             
                                 self.state[p]['old_p'] = p.data.clone()
-                                e_w = p.grad/ (p.grad.norm() + 1e-12 ) * (perturb_len)
-                                p.add_(e_w.view(p.data.shape))
-                        # Mark this parameter as updated
-                        updated_n.add(n)
-
-                    
-
-        if zero_grad:
-            self.zero_grad()
-
-
-
-    @torch.no_grad()
-    def step1(self, zero_grad=False):
-        """First step: Perturb particle-specific parameters using SAM logic and save the original parameters."""
-        
-        # Get the particle-specific gradients for all LoRA layers
-        q_A_grad, q_B_grad, v_A_grad, v_B_grad, clsW_grad, clsB_grad = self.get_grad1()
-
-        # Create a set to keep track of the updated parameters
-        updated_n = set()
-        lr = self.param_groups[0]['lr']
-
-
-        for net_id in range(self.num_particles):
-            for layer_id in range(12):  # Assuming 12 layers
-                for n, p in self.net.lora_vit.named_parameters():
-
-                    if p.requires_grad and n not in updated_n:
-
-
-                        # Perturb the specific gradients for each particle and layer
-                        if f'blocks.{str(layer_id)}' in n:
-                            if "proj_q" in n:
-                                if f"w_a.layer.{net_id}" in n:
-
-
-                                    # Save the original parameters for each particle and layer
-                                    # perturb = ( self.state[p]['velocity'] / (self.state[p]['velocity'].norm() + 1e-12) ) * (self.rho)
-                                    # p.add_(perturb.view(p.data.shape))  # Apply perturbation
-
-
-                                    e_w = p.grad/ (p.grad.norm() + 1e-12 ) * (self.rho)
-                                    p.add_(e_w.view(p.data.shape))
-
-
-
-                                    # Update velocity, notice that p now is theta prime, NOT theta
-                                    # self.state[p]['velocity'].mul_(self.momentum).add_( (1 - self.momentum) * p.grad.data )
-
-                                
-                                elif f"w_b.layer.{net_id}" in n:
-
-                                    # Normalize and rescale to make sure that norm(e_w) = rho
-                                    e_w = p.grad/ (p.grad.norm() + 1e-12 ) * (self.rho)
-                                    p.add_(e_w.view(p.data.shape))
-
-                            elif "proj_v" in n:
-                                if f"w_a.layer.{net_id}" in n:
-
-                                    e_w = p.grad/ (p.grad.norm() + 1e-12 ) * (self.rho)
-                                    p.add_(e_w.view(p.data.shape))
-
-                                elif f"w_b.layer.{net_id}" in n:
-
-                                    # Normalize and rescale to make sure that norm(e_w) = rho
-                                    e_w = p.grad/ (p.grad.norm() + 1e-12 ) * (self.rho)
-                                    p.add_(e_w.view(p.data.shape))
-
-                        elif 'fc' in n:
-                            if 'weight' in n:
-
-                                # Normalize and rescale to make sure that norm(e_w) = rho
-                                e_w = p.grad/ (p.grad.norm() + 1e-12 ) * (self.rho)
-                                p.add_(e_w.view(p.data.shape))
-                                
-
-                            elif 'bias' in n:
-
-                                # Normalize and rescale to make sure that norm(e_w) = rho
-                                e_w = p.grad/ (p.grad.norm() + 1e-12 ) * (self.rho)
+                                e_w = p.grad / (2 * lamda)
                                 p.add_(e_w.view(p.data.shape))
                         # Mark this parameter as updated
                         updated_n.add(n)
