@@ -6,7 +6,7 @@ trainer:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
       save_dir: output/dro
-      name: cifar100-bs24
+      name: cifar100-euclid
   max_epochs: 150
   val_check_interval: 50
   num_sanity_val_steps: 0
@@ -15,12 +15,12 @@ model:
   model_name: vit-b16-224-dino
   training_mode: lora
   optimizer: dro
-  lr: 0.1
+  lr: 0.15
   momentum: 0.9
   weight_decay: 0.0
   scheduler: cosine
   warmup_steps: 500
-  num_cycles: 0.5 # default
+  num_cycles: 1 # default
   rho: 0.06
   lora_r: 4
   lora_alpha: 16
@@ -39,7 +39,7 @@ data:
   dataset: cifar100
   root: ../vtab-1k/cifar100
   size: 224
-  batch_size: 24
+  batch_size: 32
   workers: 4
 model_checkpoint:
   dirpath: saved_checkpoints
