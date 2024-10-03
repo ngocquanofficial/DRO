@@ -330,7 +330,7 @@ class ClassificationModel(pl.LightningModule):
         div_loss = - log_det(y, prob_pred, self.num_particles).to(pred[0].device)
         # ensemble_loss = ensemble_entropy(y, prob_pred, self.num_particles)
 
-        loss = entropy_loss  + 0.1 * div_loss
+        loss = entropy_loss  + 0.04 * div_loss
         
         # Get accuracy
         metrics = getattr(self, f"{mode}_metrics")(pred_, y.argmax(1))
@@ -381,6 +381,8 @@ class ClassificationModel(pl.LightningModule):
             current_distance = torch.norm( perturb_output - original_output.detach().clone() ,p= 2, dim= 1).mean()
         elif self.distance == "fisher" :
             current_distance = fisher_distance( perturb_output, original_output.detach().clone())
+        elif self.distance == "wasserstein" :
+            current_distance = wasserstein_distance(perturb_output, original_output.detach().clone())
         else :
             print("SET UP DISTANCE TYPE")
 
