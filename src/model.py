@@ -26,7 +26,7 @@ from src.mixup import Mixup
 from .lora import LoRA_ViT
 from .base_vit2 import ViT, CustomLinear, CustomLinear2
 from .swag import SWAG, bn_update
-from src.utils import log_det, fisher_distance, cal_cosine_similarity
+from src.utils import log_det, fisher_distance, cal_cosine_similarity, euclid_distance
 # from .base_vit import ViT, CustomLinear
 
 torch.autograd.set_detect_anomaly(True)
@@ -377,7 +377,7 @@ class ClassificationModel(pl.LightningModule):
         # final_output = self.compute_pred(final_pred)
     
         if self.distance == "euclid" :
-            final_distance = torch.norm(final_output.detach() - original_output.detach(), p= 2, dim= 1).mean()
+            final_distance = euclid_distance(final_output.detach() - original_output.detach())
         elif self.distance == 'fisher':
             final_distance = fisher_distance(final_output.detach(), original_output.detach())
         else :
