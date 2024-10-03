@@ -65,6 +65,7 @@ class ClassificationModel(pl.LightningModule):
         weight_decay: float = 0.0,
         scheduler: str = "cosine",
         warmup_steps: int = 0,
+        num_cycles: float = 0.5,
         n_classes: int = 10,
         mixup_alpha: float = 0.0,
         cutmix_alpha: float = 0.0,
@@ -137,6 +138,7 @@ class ClassificationModel(pl.LightningModule):
         self.weight_decay = weight_decay
         self.scheduler = scheduler
         self.warmup_steps = warmup_steps
+        self.num_cycles = num_cycles
         self.n_classes = n_classes
         self.mixup_alpha = mixup_alpha
         self.cutmix_alpha = cutmix_alpha
