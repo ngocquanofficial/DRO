@@ -377,7 +377,7 @@ class ClassificationModel(pl.LightningModule):
         # final_output = self.compute_pred(final_pred)
     
         if self.distance == "euclid" :
-            final_distance = euclid_distance(final_output.detach() - original_output.detach())
+            final_distance = euclid_distance(final_output.detach(), original_output.detach(), bound= self.bound)
         elif self.distance == 'fisher':
             final_distance = fisher_distance(final_output.detach(), original_output.detach())
         else :
