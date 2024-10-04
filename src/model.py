@@ -94,7 +94,7 @@ class ClassificationModel(pl.LightningModule):
 
         # DRO
         grad_loop: int = 3,
-        lamda = 1,
+        lamda = 3,
         distance= "fisher",
         bound= None,
 
@@ -385,6 +385,7 @@ class ClassificationModel(pl.LightningModule):
             
 
             # Update lamda by hand 
+            print(raw_distance)
             lamda_ew = self.bound - final_distance.detach().clone()
             self.lamda = torch.clamp(self.lamda - current_lr * lamda_ew, min= 0.01)
 
