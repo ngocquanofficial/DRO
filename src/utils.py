@@ -10,7 +10,10 @@ from scipy.spatial.distance import pdist, squareform
 import torch.linalg as linalg
 
 def euclid_distance(pred1, pred2, bound, tau= 0.04) :
-    raw_dist = torch.norm( pred1 - pred2 , p= 2, dim= 1).mean()
+    prob1 = F.softmax(pred1, dim=1)
+    prob2 = F.softmax(pred2, dim=1)
+
+    raw_dist = torch.norm( prob1 - prob2 , p= 2, dim= 1).mean()
 
     return torch.exp(max(0, raw_dist - bound) / tau) * raw_dist, raw_dist
 
