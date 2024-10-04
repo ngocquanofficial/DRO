@@ -8,7 +8,7 @@ import torch
 import torch.nn.functional as F
 from peft import LoraConfig, get_peft_model
 from torch.optim import SGD, Adam, AdamW
-from .utils import DRO
+from .utils import DRO, SAM
 from torch.optim.lr_scheduler import LambdaLR
 from torch.optim.swa_utils import AveragedModel, SWALR
 from torch.optim.lr_scheduler import CosineAnnealingLR
@@ -180,15 +180,6 @@ class ClassificationModel(pl.LightningModule):
                 f"{model_name} is not an available model. Should be one of {[k for k in MODEL_DICT.keys()]}"
             )
 
-        # # Initialize with pretrained weights
-        # self.net = AutoModelForImageClassification.from_pretrained(
-        #     model_path,
-        #     num_labels=self.n_classes,
-        #     ignore_mismatched_sizes=True,
-        #     image_size=self.image_size,
-        # )
-        
-        # if self.optimizer in ['svgd', "deep_ens", 'SWAG', "flat_seeking", 'dro']:
         print('Model name', self.model_name)
         # self.net = ViT(name='B_16_imagenet1k', pretrained=True, num_classes=self.n_classes, image_size=self.image_size, num_particles=self.num_particles)
         self.net = ViT(name='vit-b16-224-in21k', pretrained=True, num_classes=self.n_classes, image_size=self.image_size, num_particles=self.num_particles, weight_path=weights_path)
@@ -286,26 +277,12 @@ class ClassificationModel(pl.LightningModule):
 
         self.test_metric_outputs = []
         
-        # if self.optimizer in ['svgd', 'deep_ens', 'SWAG', 'flat_seeking', 'dro']:
         self.automatic_optimization = False
 
     def forward(self, x):
-        # if self.optimizer not in ['svgd', 'deep_ens', 'SWAG', 'flat_seeking', 'dro']:
-        #     return self.net(x).logits
-        # else:
         
         res = self.net(x)
         return res
-
-
-    def compute_pred(self, pred) :
-
-        pred_ = 0 #final_prediction
-        for j in range(self.num_particles):
-            pred_ = pred_ + pred[j]
-        pred_ = pred_/max(1, self.num_particles)
-
-        return pred_
 
     def shared_step(self, batch, mode="train", logging= True):
         x, y = batch
@@ -324,6 +301,8 @@ class ClassificationModel(pl.LightningModule):
         for j in range(self.num_particles):
             pred_ = pred_ + pred[j]
         pred_ = pred_/max(1, self.num_particles)
+
+
         entropy_loss = self.loss_fn(pred_, y)
 
         prob_pred = [torch.nn.functional.softmax(i, dim= -1) for i in pred]
@@ -361,44 +340,62 @@ class ClassificationModel(pl.LightningModule):
         scheduler = self.lr_schedulers()
         torch.autograd.set_detect_anomaly(True)
 
+        if self.optimizer == 'sam' :
 
-        # STEP 1 (same as SAM)
-        loss, original_output = self.shared_step(batch, "train")
-        # original_output = self.compute_pred(original_pred) 
-
-        opt.zero_grad()
-        self.manual_backward(loss)
-
-        opt.step1(lamda= self.lamda, zero_grad= True)
+            # STEP 1 
+            loss, original_output = self.shared_step(batch, "train")
+            opt.zero_grad()
+            self.manual_backward(loss)
+            opt.step1(zero_grad= True)
 
 
-        # STEP 2
-        final_loss, final_output = self.shared_step(batch, "train", logging = False)
-        # final_output = self.compute_pred(final_pred)
-    
-        if self.distance == "euclid" :
-            final_distance = euclid_distance(final_output.detach(), original_output.detach(), bound= self.bound)
-        elif self.distance == 'fisher':
-            final_distance = fisher_distance(final_output.detach(), original_output.detach())
-        else :
-            print("ERROR distance")
+            # STEP 2
+            final_loss, final_output = self.shared_step(batch, "train", logging = False)
 
-        self.manual_backward(final_loss)
-        opt.step2(zero_grad= True)
+            self.manual_backward(final_loss)
+            opt.step2(zero_grad= True) 
+
+            opt.zero_grad()
+            scheduler.step()
+
+
+
+
+        elif self.optimizer == 'dro' :
+                
+            # STEP 1 (same as SAM)
+            loss, original_output = self.shared_step(batch, "train")
+
+            opt.zero_grad()
+            self.manual_backward(loss)
+            opt.step1(lamda= self.lamda, zero_grad= True)
+
+            # STEP 2
+            final_loss, final_output = self.shared_step(batch, "train", logging = False)
         
+            if self.distance == "euclid" :
+                final_distance, raw_distance = euclid_distance(final_output.detach(), original_output.detach(), bound= self.bound)
+            elif self.distance == 'fisher':
+                final_distance = fisher_distance(final_output.detach(), original_output.detach())
+            else :
+                print("ERROR distance")
 
-        # Update lamda by hand 
+            self.manual_backward(final_loss)
+            opt.step2(zero_grad= True) 
+            
 
-        lamda_ew = self.bound - final_distance.detach().clone()
-        self.lamda = torch.clamp(self.lamda - current_lr * lamda_ew, min= 0.01)
+            # Update lamda by hand 
+            lamda_ew = self.bound - final_distance.detach().clone()
+            self.lamda = torch.clamp(self.lamda - current_lr * lamda_ew, min= 0.01)
 
 
-        opt.zero_grad()
-        scheduler.step()
+            opt.zero_grad()
+            scheduler.step()
 
-        # Log lamda
-        self.log(f"LAMDA", self.lamda.item(), on_epoch=True)
-        self.log(f"perturb_distance", final_distance.item(), on_epoch=True)
+
+            # Log lamda
+            self.log(f"LAMDA", self.lamda.item(), on_epoch=True)
+            self.log(f"perturb_distance", raw_distance.item(), on_epoch=True)
 
 
     def validation_step(self, batch, _):
@@ -438,8 +435,14 @@ class ClassificationModel(pl.LightningModule):
         if self.optimizer == "dro":  #use Adam as the base optimizer by default @@        
             base_optimizer = torch.optim.SGD
 
-            optimizer =  DRO(param = self.net.parameters(),base_optimizer= base_optimizer, lr=self.lr, betas=self.betas,
-                weight_decay=self.weight_decay, num_particles=self.num_particles, train_module=self, net=self.net, rho= self.rho)
+            # optimizer =  DRO(param = self.net.parameters(),base_optimizer= base_optimizer, lr=self.lr, betas=self.betas,
+            #     weight_decay=self.weight_decay, num_particles=self.num_particles, train_module=self, net=self.net, rho= self.rho)
+            optimizer = DRO(self.net.parameters(), base_optimizer, lr= self.lr, momentum=0.9)
+
+
+        elif self.optimizer == 'sam' :
+            base_optimizer = torch.optim.SGD
+            optimizer = SAM(self.net.parameters(), base_optimizer, lr= self.lr, momentum=0.9)
 
         else:
             raise ValueError(
