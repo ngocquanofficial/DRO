@@ -309,7 +309,10 @@ class ClassificationModel(pl.LightningModule):
         div_loss = - log_det(y, prob_pred, self.num_particles).to(pred[0].device)
         # ensemble_loss = ensemble_entropy(y, prob_pred, self.num_particles)
 
-        loss = entropy_loss  + 0.04 * div_loss
+        if self.optimizer == 'sam' :
+            loss = entropy_loss
+        elif self.optimizer == 'dro' :
+            loss = entropy_loss  + 0.02 * div_loss
         
         # Get accuracy
         metrics = getattr(self, f"{mode}_metrics")(pred_, y.argmax(1))
@@ -387,7 +390,7 @@ class ClassificationModel(pl.LightningModule):
             # Update lamda by hand 
             print(raw_distance)
             lamda_ew = self.bound - final_distance.detach().clone()
-            self.lamda = torch.clamp(self.lamda - current_lr * lamda_ew, min= 0.01)
+            self.lamda = torch.clamp(self.lamda - current_lr * lamda_ew, min= 1)
 
 
             opt.zero_grad()

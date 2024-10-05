@@ -15,7 +15,7 @@ model:
   model_name: vit-b16-224-dino
   training_mode: lora
   optimizer: sam
-  lr: 0.5
+  lr: 0.25
   momentum: 0.9
   weight_decay: 0.0
   scheduler: cosine

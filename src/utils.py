@@ -9,7 +9,7 @@ import torch.optim as optim
 from scipy.spatial.distance import pdist, squareform
 import torch.linalg as linalg
 
-def euclid_distance(pred1, pred2, bound, tau= 0.04) :
+def euclid_distance(pred1, pred2, bound, tau= 0.01) :
     prob1 = F.softmax(pred1, dim=1)
     prob2 = F.softmax(pred2, dim=1)
 
