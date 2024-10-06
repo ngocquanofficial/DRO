@@ -5,15 +5,15 @@ trainer:
   logger:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
-      save_dir: output/fsvi_fixaug/
-      name: clevrcount-r16-ver5-lr-2.5-rho-0_fsvi_tmux-[10]_sigma_1  
-  max_epochs: 150
+      save_dir: output/dro/
+      name: clevrcount
+  max_epochs: 100
   val_check_interval: 50
   num_sanity_val_steps: 0
 model:
   model_name: vit-b16-224-dino
   training_mode: lora
-  optimizer: svgd
+  optimizer: dro
   lr: 2.5
   momentum: 0.9
   weight_decay: 0.0
@@ -31,12 +31,15 @@ model:
   swa_freq: 1
   use_swa_svgd: False
   use_sym_kl: False
+  bound: 0.03
+  distance: euclid
+
 data:
   train_aug: True
   dataset: clevrcount
-  root: ../Z.Data/vtab-1k/clevr_count
+  root: ../vtab-1k/clevr_count
   size: 224
-  batch_size: 64
+  batch_size: 24
   workers: 4
 model_checkpoint:
   dirpath: saved_checkpoints
