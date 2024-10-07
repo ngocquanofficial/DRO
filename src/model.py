@@ -97,6 +97,7 @@ class ClassificationModel(pl.LightningModule):
         lamda = 3,
         distance= "fisher",
         bound= None,
+        clip= 0.2,
 
     ):
         """Classification Model
@@ -170,6 +171,7 @@ class ClassificationModel(pl.LightningModule):
         self.lamda = torch.tensor(float(lamda), requires_grad=False).to("cuda")
         self.distance = distance
         self.bound = bound
+        self.clip = clip
 
 
         # Initialize network
@@ -371,6 +373,7 @@ class ClassificationModel(pl.LightningModule):
 
             opt.zero_grad()
             self.manual_backward(loss)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), self.clip)
             opt.step1(lamda= self.lamda, zero_grad= True)
 
             # STEP 2
