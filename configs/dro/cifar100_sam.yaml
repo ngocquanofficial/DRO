@@ -5,7 +5,7 @@ trainer:
   logger:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
-      save_dir: output/testing
+      save_dir: output/dro-updated
       name: cifar100-sam-updated
   max_epochs: 150
   val_check_interval: 50
