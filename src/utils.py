@@ -522,6 +522,7 @@ class DRO(torch.optim.Optimizer):
                 if p.grad is None: continue
                 self.state[p]["old_p"] = p.data.clone()
                 e_w = p.grad / ( 2 * lamda)
+                # print(p.grad.norm(p=2))
                 p.add_(e_w)  # climb to the local maximum "w + e(w)"
 
         if zero_grad: self.zero_grad()

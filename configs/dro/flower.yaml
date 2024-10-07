@@ -5,7 +5,7 @@ trainer:
   logger:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
-      save_dir: output/dro/
+      save_dir: output/dro1/
       name: flower
   max_epochs: 100
   # max_steps: 10000
@@ -35,7 +35,7 @@ model:
   distance: euclid
 data:
   dataset: flower
-  root: ../vtab-1k/eurosat
+  root: ../vtab-1k/oxford_flowers102
   size: 224
   batch_size: 24
   workers: 4
