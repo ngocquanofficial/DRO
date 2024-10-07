@@ -20,7 +20,6 @@ model:
   weight_decay: 0.0
   scheduler: cosine
   warmup_steps: 500
-  num_cycles: 1 # default
   rho: 0.06
   lora_r: 4
   lora_alpha: 16

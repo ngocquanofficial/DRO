@@ -20,7 +20,6 @@ model:
   weight_decay: 0.0
   scheduler: cosine
   warmup_steps: 500
-  num_cycles: 1 # default
   rho: 0.06
   lora_r: 4
   lora_alpha: 16
@@ -39,7 +38,7 @@ data:
   dataset: pets37
   root: ../vtab-1k/oxford_iiit_pet
   size: 224
-  batch_size: 24
+  batch_size: 2
   workers: 4
 model_checkpoint:
   dirpath: saved_checkpoints

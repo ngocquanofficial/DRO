@@ -393,7 +393,7 @@ class ClassificationModel(pl.LightningModule):
             # Update lamda by hand 
 
             lamda_ew = self.bound - final_distance.detach().clone()
-            self.lamda = torch.clamp(self.lamda - current_lr * lamda_ew, min= 1, max= 5)
+            self.lamda = torch.clamp(self.lamda - current_lr * lamda_ew, min= 0.5, max= 5)
 
 
             opt.zero_grad()
