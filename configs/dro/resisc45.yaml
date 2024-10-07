@@ -7,7 +7,7 @@ trainer:
     init_args:
       save_dir: output/dro-updated
       name: resisc45
-  max_epochs: 150
+  max_epochs: 50
   # max_steps: 10000
   val_check_interval: 50
   num_sanity_val_steps: 0

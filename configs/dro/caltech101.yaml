@@ -7,7 +7,7 @@ trainer:
     init_args:
       save_dir: output/dro-updated
       name: caltech101
-  max_epochs: 100
+  max_epochs: 50
   val_check_interval: 50
   num_sanity_val_steps: 0
 model:
@@ -15,7 +15,7 @@ model:
   model_name: vit-b16-224-dino
   training_mode: lora
   optimizer: dro
-  lr: 0.25
+  lr: 0.2
   momentum: 0.9
   weight_decay: 0.0
   scheduler: cosine
