@@ -373,7 +373,7 @@ class ClassificationModel(pl.LightningModule):
 
             opt.zero_grad()
             self.manual_backward(loss)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), self.clip)
+            torch.nn.utils.clip_grad_norm_(self.net.parameters(), self.clip)
             opt.step1(lamda= self.lamda, zero_grad= True)
 
             # STEP 2
