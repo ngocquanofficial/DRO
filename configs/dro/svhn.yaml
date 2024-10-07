@@ -7,26 +7,26 @@ trainer:
     init_args:
       save_dir: output/dro-updated
       name: svhn
-  max_epochs: 150
+  max_epochs: 50
   val_check_interval: 50
   num_sanity_val_steps: 0
 model:
-  sigma: 1.4
+  sigma: 1
   model_name: vit-b16-224-dino
   training_mode: lora
   optimizer: dro
-  lr: 0.2
+  lr: 0.5
   momentum: 0.9
   weight_decay: 0.0
   scheduler: cosine
   warmup_steps: 500
-  rho: 0.06
-  lora_r: 4
-  lora_alpha: 16
+  rho: 0
+  lora_r: 16
+  lora_alpha: 8
   num_particles: 4
   cov_mat: True
   max_num_models: 20
-  use_sam: True
+  use_sam: False
   start_swa_step: 200
   swa_freq: 1
   use_swa_svgd: False
@@ -34,14 +34,14 @@ model:
   bound: 0.03
   distance: euclid
 data:
-  train_aug: False
+  train_aug: True
   dataset: svhn
   root: ../vtab-1k/svhn
   size: 224
   batch_size: 24
   workers: 4
 model_checkpoint:
-  dirpath: saved_checkpoints
+  dirpath: saved_checkpoints/svgd
   filename: best-step-{step}-{val_acc:.4f}
   monitor: val_acc
   mode: max

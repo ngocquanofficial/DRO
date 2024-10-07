@@ -6,12 +6,12 @@ trainer:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
       save_dir: output/dro-updated
-      name: pets
+      name: pets 
   max_epochs: 50
   val_check_interval: 50
   num_sanity_val_steps: 0
 model:
-  sigma: 1.4
+  sigma: 1
   model_name: vit-b16-224-dino
   training_mode: lora
   optimizer: dro
@@ -20,13 +20,13 @@ model:
   weight_decay: 0.0
   scheduler: cosine
   warmup_steps: 500
-  rho: 0.06
-  lora_r: 4
-  lora_alpha: 16
+  rho: 0
+  lora_r: 16
+  lora_alpha: 8
   num_particles: 4
   cov_mat: True
   max_num_models: 20
-  use_sam: True
+  use_sam: False
   start_swa_step: 200
   swa_freq: 1
   use_swa_svgd: False
@@ -34,11 +34,11 @@ model:
   bound: 0.03
   distance: euclid
 data:
-  train_aug: False
+  train_aug: True
   dataset: pets37
   root: ../vtab-1k/oxford_iiit_pet
   size: 224
-  batch_size: 2
+  batch_size: 24
   workers: 4
 model_checkpoint:
   dirpath: saved_checkpoints
