@@ -5,8 +5,8 @@ trainer:
   logger:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
-      save_dir: output/fsvi_fixaug/
-      name: smallnorb_ele-ver8-bsz64-alpha-12-r2-lr1-rho0.05-tmux-[17]-sigma1
+      save_dir: output/dro-updated/
+      name: smallnorb_ele
   max_epochs: 50
   # max_steps: 10000
   val_check_interval: 50
@@ -15,8 +15,8 @@ model:
   sigma: 1
   model_name: vit-b16-224-dino
   training_mode: lora
-  optimizer: svgd
-  lr: 1
+  optimizer: dro
+  lr: 0.2
   momentum: 0.9
   weight_decay: 0.0
   scheduler: cosine
@@ -32,12 +32,14 @@ model:
   swa_freq: 5
   use_swa_svgd: False 
   use_sym_kl: False
+  bound: 0.03
+  distance: euclid
 data:
   train_aug: False
   dataset: smallnorb_ele
-  root: ../Z.Data/vtab-1k/smallnorb_ele
+  root: ../vtab-1k/smallnorb_ele
   size: 224
-  batch_size: 64
+  batch_size: 24
   workers: 4
 model_checkpoint:
   dirpath: saved_checkpoints
