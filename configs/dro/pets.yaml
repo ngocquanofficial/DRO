@@ -5,7 +5,7 @@ trainer:
   logger:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
-      save_dir: output/dro-updated
+      save_dir: output/dro-updated-new
       name: pets 
   max_epochs: 50
   val_check_interval: 50
