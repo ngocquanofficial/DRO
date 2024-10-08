@@ -24,7 +24,7 @@ model:
   rho: 0.05
   lora_r: 8
   lora_alpha: 8
-  num_particles: 4
+  num_particles: 3
   cov_mat: False
   max_num_models: 20
   use_sam: True
