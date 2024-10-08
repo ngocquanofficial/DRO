@@ -16,7 +16,7 @@ model:
   model_name: vit-b16-224-dino
   training_mode: lora
   optimizer: dro
-  lr: 0.3
+  lr: 0.15
   momentum: 0.9
   weight_decay: 1e-4
   scheduler: cosine
@@ -34,6 +34,7 @@ model:
   use_sym_kl: False
   bound: 0.03
   distance: euclid
+  clip: 0.12
 data:
   train_aug: True 
   dataset: kitti

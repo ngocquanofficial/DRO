@@ -5,6 +5,8 @@ weights/
 notebooks/
 sbatch_results/
 saved_checkpoints/
+dro_csv/
+dro_csv_new/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
