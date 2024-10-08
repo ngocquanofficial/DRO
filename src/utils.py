@@ -502,13 +502,14 @@ class SAM(torch.optim.Optimizer):
 
 
 class DRO(torch.optim.Optimizer):
-    def __init__(self, params, base_optimizer, rho=0.05, adaptive=False, **kwargs):
+    def __init__(self, params, base_optimizer, rho=0.05, adaptive=False,distance= "euclid", **kwargs):
         assert rho >= 0.0, f"Invalid rho, should be non-negative: {rho}"
 
         defaults = dict(rho=rho, adaptive=adaptive, **kwargs)
         super(DRO, self).__init__(params, defaults)
 
         self.base_optimizer = base_optimizer(self.param_groups, **kwargs)
+        self.distance = distance
         self.param_groups = self.base_optimizer.param_groups
         self.defaults.update(self.base_optimizer.defaults)
 
@@ -521,7 +522,13 @@ class DRO(torch.optim.Optimizer):
             for p in group["params"]:
                 if p.grad is None: continue
                 self.state[p]["old_p"] = p.data.clone()
-                e_w = p.grad / ( 2 * lamda)
+                if self.distance == 'euclid' :
+                    e_w = p.grad / ( 2 * lamda)
+                elif self.distance == 'fisher' :
+                    e_w = 1 / ( 2 * lamda * p.grad)
+                else :
+                    print("Distance error")
+
 
                 p.add_(e_w)  # climb to the local maximum "w + e(w)"
 
