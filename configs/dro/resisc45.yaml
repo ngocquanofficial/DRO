@@ -31,6 +31,8 @@ model:
   swa_freq: 5
   use_swa_svgd: True 
   use_sym_kl: True
+  bound: 0.03
+  distance: euclid
 data:
   train_aug: True
   dataset: resisc45
