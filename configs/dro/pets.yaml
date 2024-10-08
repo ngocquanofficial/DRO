@@ -15,14 +15,14 @@ model:
   model_name: vit-b16-224-dino
   training_mode: lora
   optimizer: dro
-  lr: 0.2
+  lr: 0.4
   momentum: 0.9
   weight_decay: 0.0
   scheduler: cosine
   warmup_steps: 500
   rho: 0
   lora_r: 16
-  lora_alpha: 8
+  lora_alpha: 16
   num_particles: 4
   cov_mat: True
   max_num_models: 20

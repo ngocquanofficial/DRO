@@ -7,7 +7,7 @@ trainer:
     init_args:
       save_dir: output/dro-updated
       name: resisc45
-  max_epochs: 50
+  max_epochs: 75
   # max_steps: 10000
   val_check_interval: 50
   num_sanity_val_steps: 0
@@ -32,6 +32,7 @@ model:
   use_swa_svgd: True 
   use_sym_kl: True
 data:
+  train_aug: True
   dataset: resisc45
   root: ../vtab-1k/resisc45
   size: 224

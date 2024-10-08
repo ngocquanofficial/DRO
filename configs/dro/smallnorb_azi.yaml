@@ -7,7 +7,7 @@ trainer:
     init_args:
       save_dir: output/dro-updated/
       name: smallnorb-azi
-  max_epochs: 50
+  max_epochs: 75
   # max_steps: 10000
   val_check_interval: 50
   num_sanity_val_steps: 0
@@ -22,8 +22,8 @@ model:
   scheduler: cosine
   warmup_steps: 500
   rho: 0.03
-  lora_r: 4
-  lora_alpha: 15
+  lora_r: 8
+  lora_alpha: 8
   num_particles: 4
   cov_mat: False
   max_num_models: 20
@@ -34,6 +34,7 @@ model:
   use_sym_kl: False
   bound: 0.03
   distance: euclid
+  clip: 0.12
 data:
   train_aug: False
   dataset: smallnorb_azi

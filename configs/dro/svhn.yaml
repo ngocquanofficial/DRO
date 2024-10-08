@@ -7,7 +7,7 @@ trainer:
     init_args:
       save_dir: output/dro-updated
       name: svhn
-  max_epochs: 50
+  max_epochs: 75
   val_check_interval: 50
   num_sanity_val_steps: 0
 model:
@@ -15,13 +15,13 @@ model:
   model_name: vit-b16-224-dino
   training_mode: lora
   optimizer: dro
-  lr: 0.5
+  lr: 0.4
   momentum: 0.9
   weight_decay: 0.0
   scheduler: cosine
   warmup_steps: 500
   rho: 0
-  lora_r: 16
+  lora_r: 8
   lora_alpha: 8
   num_particles: 4
   cov_mat: True
