@@ -7,7 +7,7 @@ trainer:
     init_args:
       save_dir: output/dro-updated-new
       name: cifar100-dro-updated
-  max_epochs: 50
+  max_epochs: 75
   val_check_interval: 50
   num_sanity_val_steps: 0
 model:
@@ -22,7 +22,7 @@ model:
   warmup_steps: 500
   rho: 0.06
   lora_r: 4
-  lora_alpha: 16
+  lora_alpha: 4
   num_particles: 4
   cov_mat: True
   max_num_models: 20
