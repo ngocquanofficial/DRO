@@ -26,4 +26,4 @@ eval "$(conda shell.bash hook)"
 conda activate /lustre/scratch/client/vinai/users/quanpn2/angry
 
 # Run Python script
-python main.py fit --config configs/dro/kitti.yaml
+python main.py fit --config configs/dro_fisher/kitti.yaml
