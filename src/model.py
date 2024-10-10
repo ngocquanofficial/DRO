@@ -98,6 +98,7 @@ class ClassificationModel(pl.LightningModule):
         distance= "fisher",
         bound= None,
         clip= 0.2,
+        alpha_div=0.02
 
     ):
         """Classification Model
@@ -172,6 +173,7 @@ class ClassificationModel(pl.LightningModule):
         self.distance = distance
         self.bound = bound
         self.clip = clip
+        self.alpha_div = alpha_div
 
 
         # Initialize network
@@ -314,7 +316,7 @@ class ClassificationModel(pl.LightningModule):
         if self.optimizer == 'sam' :
             loss = entropy_loss
         elif self.optimizer == 'dro' :
-            loss = entropy_loss  + 0.02 * div_loss
+            loss = entropy_loss  + self.alpha_div * div_loss
         
         # Get accuracy
         metrics = getattr(self, f"{mode}_metrics")(pred_, y.argmax(1))
