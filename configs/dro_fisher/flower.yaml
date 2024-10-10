@@ -5,7 +5,7 @@ trainer:
   logger:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
-      save_dir: output/dro-updated-new
+      save_dir: output/dro-fisher
       name: flower
   max_epochs: 75
   # max_steps: 10000
@@ -32,7 +32,7 @@ model:
   use_swa_svgd: False 
   use_sym_kl: False
   bound: 0.03
-  distance: euclid
+  distance: fisher
 data:
   train_aug: True
   dataset: flowers102

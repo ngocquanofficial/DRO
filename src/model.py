@@ -382,7 +382,7 @@ class ClassificationModel(pl.LightningModule):
             if self.distance == "euclid" :
                 final_distance, raw_distance = euclid_distance(final_output.detach(), original_output.detach(), bound= self.bound)
             elif self.distance == 'fisher':
-                final_distance = fisher_distance(final_output.detach(), original_output.detach())
+                final_distance, raw_distance = fisher_distance(final_output.detach(), original_output.detach(), bound= self.bound)
             else :
                 print("ERROR distance")
 

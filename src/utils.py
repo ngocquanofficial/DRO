@@ -17,7 +17,7 @@ def euclid_distance(pred1, pred2, bound, tau= 0.01) :
 
     return torch.exp(max( torch.tensor([0.0]).to(raw_dist.device) , raw_dist - bound) / tau) * raw_dist, raw_dist
 
-def fisher_distance(pred1, pred2) :
+def fisher_distance(pred1, pred2, bound, tau= 0.01) :
     # Make sure tensors are normalized to probability distributions (sum to 1)
     prob1 = F.softmax(pred1, dim=1)
     prob2 = F.softmax(pred2, dim=1)
@@ -27,7 +27,10 @@ def fisher_distance(pred1, pred2) :
     kl_divergence1 = F.kl_div(torch.log(prob1 + 1e-8), prob2 + 1e-8, reduction='batchmean')
     kl_divergence2 = F.kl_div(torch.log(prob2+ 1e-8), prob1 + 1e-8, reduction='batchmean')
     fisher = 1/2 * (kl_divergence1 + kl_divergence2)
-    return fisher
+    raw_dist = fisher
+
+    return torch.exp(max( torch.tensor([0.0]).to(raw_dist.device) , raw_dist - bound) / tau) * raw_dist, raw_dist
+    
 
 
 def wasserstein_distance(X, Y):
