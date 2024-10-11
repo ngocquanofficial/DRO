@@ -429,23 +429,28 @@ class ClassificationModel(pl.LightningModule):
         # Capture the start time of the epoch
         self.epoch_start_time = time.time()
     
-    def on_validation_epoch_end(self):
-        if self.save_ckpt :
 
-                
+    def on_validation_epoch_end(self):
+        if self.save_ckpt:
             # Retrieve the current validation accuracy
             current_val_acc = self.trainer.callback_metrics.get("val_acc", None)
             print(current_val_acc)
+
             if current_val_acc is not None:
                 current_val_acc = current_val_acc.item()
 
-                # Save checkpoint if current val_acc is higher than the best recorded val_acc
-                if current_val_acc > self.best_val_acc:
-                    print(f"New best val_acc: {current_val_acc}, saving checkpoint.")
-                    self.best_val_acc = current_val_acc
-                    self.trainer.save_checkpoint(f"{self.optimizer}_best_val_acc_{current_val_acc}.ckpt")
+                # Check if the epoch number is divisible by 10
+                current_epoch = self.trainer.current_epoch
+                if current_epoch % 5 == 0 and current_epoch > 40 :
+                    # Save checkpoint if current val_acc is higher than the best recorded val_acc
+                    if current_val_acc > self.best_val_acc:
+                        print(f"Epoch {current_epoch}: New best val_acc: {current_val_acc}, saving checkpoint.")
+                        self.best_val_acc = current_val_acc
+                        self.trainer.save_checkpoint(f"{self.optimizer}_epoch_{current_epoch}_best_val_acc_{current_val_acc}.ckpt")
+                    else:
+                        print(f"Epoch {current_epoch}: Current val_acc: {current_val_acc} did not exceed best val_acc: {self.best_val_acc}.")
                 else:
-                    print(f"Current val_acc: {current_val_acc} did not exceed best val_acc: {self.best_val_acc}.")
+                    print(f"Epoch {current_epoch}: Skipping checkpoint save as it's not divisible by 10.")
 
     def on_train_epoch_end(self):
         # Calculate elapsed time

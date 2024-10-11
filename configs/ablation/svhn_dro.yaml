@@ -6,7 +6,7 @@ trainer:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
       save_dir: output/ablation
-      name: svhn-dro
+      name: svhn-dro-new
   max_epochs: 75
   val_check_interval: 50
   num_sanity_val_steps: 0

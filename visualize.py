@@ -9,7 +9,7 @@ import random
 print("FINISH IMPORTING")
 # Load the trained model checkpoint
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-checkpoint_path = "/home/ubuntu/newDRO/sam_best_val_acc_0.8100000023841858.ckpt"  # Replace with your actual path
+checkpoint_path = "/home/ubuntu/newDRO/dro_best_val_acc_0.9950000047683716.ckpt"  # Replace with your actual path
 model = ClassificationModel.load_from_checkpoint(checkpoint_path)
 model.eval()
 model.to(device)
@@ -32,57 +32,118 @@ test_dataloader = data_module.test_dataloader()
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
-true_label= 9
-predictions_per_model = [[], [], [], []]  # Collect predictions for each model for samples with label 0
-print("GO here")
-# Iterate over the test dataset to collect predictions for label=0 samples
-with torch.no_grad():
-    for batch_idx, batch in enumerate(test_dataloader):
-        inputs, labels = batch
-        inputs, labels = inputs.to(device), labels.to(device)
-        # Filter samples where label == 0
-        zero_label_indices = (labels == true_label).nonzero(as_tuple=True)[0]
 
-        if len(zero_label_indices) > 0:
-            # Get model predictions for these filtered samples
-            outputs = model(inputs[zero_label_indices])
-            for i, output in enumerate(outputs):
-                predictions_per_model[i].append(output)
+def main(true_label= 0) :
+        
+    true_label= true_label
+    total_true_sample= 0
+    predictions_per_model = [[], [], [], []]  # Collect predictions for each model for samples with label 0
+    print("GO here")
+    # Iterate over the test dataset to collect predictions for label=0 samples
 
 
-# Calculate the average prediction per model for samples with label=0
-avg_predictions_per_model = []
-for i, predictions in enumerate(predictions_per_model):
-    if len(predictions) > 0:
-        # Concatenate the predictions to make a single tensor with shape [N, 100]
-        stacked_predictions = torch.cat(predictions, dim=0)  # Concatenate along the batch dimension
-        print(stacked_predictions.shape)
-        avg_prediction = torch.mean(stacked_predictions, dim=0)
-        print(avg_prediction.shape)
-        avg_predictions_per_model.append(avg_prediction)
+    with torch.no_grad():
+        for batch_idx, batch in enumerate(test_dataloader):
+            inputs, labels = batch
+            inputs, labels = inputs.to(device), labels.to(device)
+            # Filter samples where label == true_label
+            true_label_indices = (labels == true_label).nonzero(as_tuple=True)[0]
+            total_true_sample += len(true_label_indices)
+            if len(true_label_indices) > 0:
+                # Get model predictions for these filtered samples
+                outputs = model(inputs[true_label_indices])  # outputs is a list of tensors
+                # Calculate the average prediction across the models
+                avg_predictions = torch.mean(torch.stack(outputs), dim=0)  # shape: (batch_size, dimension)
+                
+                # Get predicted labels by taking the argmax along the dimension (assumes classification task)
+                predicted_labels = avg_predictions.argmax(dim=1)  # shape: (batch_size,)
+
+                # Filter samples where the predicted label matches the true label
+                correct_indices = (predicted_labels == true_label).nonzero(as_tuple=True)[0]
+
+                if len(correct_indices) > 0:
+                    # Get the corresponding outputs for these correctly predicted samples
+                    for i, output in enumerate(outputs):
+                        predictions_per_model[i].append(output[correct_indices])
 
 
 
 
-# Plotting histograms for each model based on the average prediction
-fig, axes = plt.subplots(2, 2, figsize=(20, 12))  # 2x2 grid of subplots
+    # Calculate the average prediction per model for samples with label=0
+    avg_predictions_per_model = []
+    for i, predictions in enumerate(predictions_per_model):
+        if len(predictions) > 0:
+            # Concatenate the predictions to make a single tensor with shape [N, 100]
+            stacked_predictions = torch.cat(predictions, dim=0)  # Concatenate along the batch dimension
+            print(stacked_predictions.shape)
+            avg_prediction = torch.mean(stacked_predictions, dim=0)
+            print(avg_prediction.shape)
+            avg_predictions_per_model.append(avg_prediction)
 
-# Define colors and edge styles
-bar_color = '#f0f0f0'  # Very light gray, nearly white
-bar_edge_color = 'black'
-highlight_color = 'skyblue'
-highlight_edge_color = 'black'
 
-for i, avg_prediction in enumerate(avg_predictions_per_model):
-    if avg_prediction is not None:
-        prob = F.softmax(avg_prediction, dim=-1).cpu().numpy()
 
-        # Determine the row and column in the subplot grid
-        row, col = divmod(i, 2)
+
+    # Plotting histograms for each model based on the average prediction
+    fig, axes = plt.subplots(2, 2, figsize=(20, 12))  # 2x2 grid of subplots
+
+    # Define colors and edge styles
+    bar_color = '#f0f0f0'  # Very light gray, nearly white
+    bar_edge_color = 'black'
+    highlight_color = 'skyblue'
+    highlight_edge_color = 'black'
+
+    for i, avg_prediction in enumerate(avg_predictions_per_model):
+        if avg_prediction is not None:
+            # prob = F.softmax(avg_prediction, dim=-1).cpu().numpy()
+            prob = avg_prediction - avg_prediction.min()  # Subtract the min value
+            prob = prob / prob.sum()  # Divide by the sum to get the probabilities
+            prob = prob.cpu().numpy()  # Convert to numpy array
+
+            # Determine the row and column in the subplot grid
+            row, col = divmod(i, 2)
+
+            # Plot the histogram bars
+            bars = axes[row, col].bar(
+                range(len(prob)), prob, color=bar_color, edgecolor=bar_edge_color, label='Prediction Probabilities', linewidth= 2
+            )
+
+            # Highlight the true label bar
+            bars[true_label].set_color(highlight_color)
+            bars[true_label].set_edgecolor(highlight_edge_color)
+
+            # Set titles and labels
+            axes[row, col].set_xlabel('Class Index')
+            axes[row, col].set_ylabel('Probability')
+            axes[row, col].set_title(f'Model {i+1} Average Prediction Probability Histogram for Label 0')
+            axes[row, col].legend()
+
+    plt.tight_layout()
+    plt.savefig(f"./images/class{true_label}.png")
+    plt.show()
+
+
+
+
+
+
+
+
+    # Calculate the final average prediction across all models
+    if len(avg_predictions_per_model) > 0:
+        # Stack the average predictions and calculate the mean across models
+        final_avg_prediction = torch.mean(torch.stack(avg_predictions_per_model), dim=0)
+
+        # Normalize the probabilities
+        prob = final_avg_prediction - final_avg_prediction.min()  # Subtract the min value
+        prob = prob / prob.sum()  # Divide by the sum to get the probabilities
+        prob = prob.cpu().numpy()  # Convert to numpy array
+
+        # Create a new figure for the final average prediction histogram
+        fig, ax = plt.subplots(figsize=(8, 6))
 
         # Plot the histogram bars
-        bars = axes[row, col].bar(
-            range(len(prob)), prob, color=bar_color, edgecolor=bar_edge_color, label='Prediction Probabilities', linewidth= 2
+        bars = ax.bar(
+            range(len(prob)), prob, color=bar_color, edgecolor=bar_edge_color, label='Final Average Prediction Probabilities', linewidth=2
         )
 
         # Highlight the true label bar
@@ -90,16 +151,14 @@ for i, avg_prediction in enumerate(avg_predictions_per_model):
         bars[true_label].set_edgecolor(highlight_edge_color)
 
         # Set titles and labels
-        axes[row, col].set_xlabel('Class Index')
-        axes[row, col].set_ylabel('Probability')
-        axes[row, col].set_title(f'Model {i+1} Average Prediction Probability Histogram for Label 0')
-        axes[row, col].legend()
+        ax.set_xlabel('Class Index')
+        ax.set_ylabel('Probability')
+        ax.set_title(f'Final Average Prediction Probability Histogram for Label {true_label}')
+        ax.legend()
 
-plt.tight_layout()
-plt.savefig("./images/average_predictions_histogram_update.png")
-plt.show()
-
-
+        plt.tight_layout()
+        plt.savefig(f"./images/final_class{true_label}.png")
+        plt.show()
 
 
 
@@ -111,23 +170,29 @@ plt.show()
 
 
 
-# # Plotting histograms for each model based on the average prediction
-# fig, axes = plt.subplots(2, 2, figsize=(20, 12))  # 2x2 grid of subplots
 
-# for i, avg_prediction in enumerate(avg_predictions_per_model):
-#     if avg_prediction is not None:
-#         prob = F.softmax(avg_prediction, dim=-1).cpu().numpy()
 
-#         # Determine the row and column in the subplot grid
-#         row, col = divmod(i, 2)
+    # # Plotting histograms for each model based on the average prediction
+    # fig, axes = plt.subplots(2, 2, figsize=(20, 12))  # 2x2 grid of subplots
 
-#         axes[row, col].bar(range(len(prob)), prob, color='skyblue', label='Prediction Probabilities')
-#         axes[row, col].bar(true_label, prob[true_label], color='orange', label=f'True Label (Class {true_label})')
-#         axes[row, col].set_xlabel('Class Index')
-#         axes[row, col].set_ylabel('Probability')
-#         axes[row, col].set_title(f'Model {i+1} Average Prediction Probability Histogram for Label 0')
-#         axes[row, col].legend()
+    # for i, avg_prediction in enumerate(avg_predictions_per_model):
+    #     if avg_prediction is not None:
+    #         prob = F.softmax(avg_prediction, dim=-1).cpu().numpy()
 
-# plt.tight_layout()
-# plt.savefig("./images/average_predictions_histogram_update.png")
-# plt.show()
+    #         # Determine the row and column in the subplot grid
+    #         row, col = divmod(i, 2)
+
+    #         axes[row, col].bar(range(len(prob)), prob, color='skyblue', label='Prediction Probabilities')
+    #         axes[row, col].bar(true_label, prob[true_label], color='orange', label=f'True Label (Class {true_label})')
+    #         axes[row, col].set_xlabel('Class Index')
+    #         axes[row, col].set_ylabel('Probability')
+    #         axes[row, col].set_title(f'Model {i+1} Average Prediction Probability Histogram for Label 0')
+    #         axes[row, col].legend()
+
+    # plt.tight_layout()
+    # plt.savefig("./images/average_predictions_histogram_update.png")
+    # plt.show()
+
+
+for i in reversed(range(10)) :
+    main(i)
