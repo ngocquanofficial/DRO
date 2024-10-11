@@ -97,6 +97,7 @@ class ClassificationModel(pl.LightningModule):
         lamda = 3,
         distance= "fisher",
         bound= None,
+        clip= 0.2,
 
     ):
         """Classification Model
@@ -170,6 +171,7 @@ class ClassificationModel(pl.LightningModule):
         self.lamda = torch.tensor(float(lamda), requires_grad=False).to("cuda")
         self.distance = distance
         self.bound = bound
+        self.clip = clip
 
 
         # Initialize network
@@ -371,6 +373,7 @@ class ClassificationModel(pl.LightningModule):
 
             opt.zero_grad()
             self.manual_backward(loss)
+            torch.nn.utils.clip_grad_norm_(self.net.parameters(), self.clip)
             opt.step1(lamda= self.lamda, zero_grad= True)
 
             # STEP 2
@@ -379,7 +382,7 @@ class ClassificationModel(pl.LightningModule):
             if self.distance == "euclid" :
                 final_distance, raw_distance = euclid_distance(final_output.detach(), original_output.detach(), bound= self.bound)
             elif self.distance == 'fisher':
-                final_distance = fisher_distance(final_output.detach(), original_output.detach())
+                final_distance, raw_distance = fisher_distance(final_output.detach(), original_output.detach(), bound= self.bound)
             else :
                 print("ERROR distance")
 
@@ -388,9 +391,9 @@ class ClassificationModel(pl.LightningModule):
             
 
             # Update lamda by hand 
-            print(raw_distance)
+
             lamda_ew = self.bound - final_distance.detach().clone()
-            self.lamda = torch.clamp(self.lamda - current_lr * lamda_ew, min= 1)
+            self.lamda = torch.clamp(self.lamda - current_lr * lamda_ew, min= 0.5, max= 5)
 
 
             opt.zero_grad()

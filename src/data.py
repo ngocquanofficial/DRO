@@ -124,13 +124,13 @@ DATASET_DICT = {
         partial(ImageFolder, split="test", download=True),
         5,
     ],
-    "clevrcount": [
+    "clevr_count": [
         partial(ImageFolder, split="train", download=True),
         partial(ImageFolder, split="test", download=True),
         partial(ImageFolder, split="test", download=True),
         8,
     ],
-    "clevrdist": [
+    "clevr_dist": [
         partial(ImageFolder, split="train", download=True),
         partial(ImageFolder, split="test", download=True),
         partial(ImageFolder, split="test", download=True),

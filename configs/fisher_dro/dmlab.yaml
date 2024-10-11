@@ -6,21 +6,22 @@ trainer:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
       save_dir: output/dro
-      name: caltech101-lr-0.5-bound-0.03
+      name: dmlab
   max_epochs: 100
+  # max_steps: 10000
   val_check_interval: 50
   num_sanity_val_steps: 0
 model:
-  sigma: 1.4
   model_name: vit-b16-224-dino
   training_mode: lora
   optimizer: dro
-  lr: 0.5
+  lr: 2
+  sigma: 1
   momentum: 0.9
   weight_decay: 0.0
   scheduler: cosine
   warmup_steps: 500
-  rho: 0.05
+  rho: 0.03
   lora_r: 8
   lora_alpha: 8
   num_particles: 4
@@ -28,18 +29,18 @@ model:
   max_num_models: 20
   use_sam: True
   start_swa_step: 200
-  swa_freq: 1
-  use_swa_svgd: False
+  swa_freq: 5
+  use_swa_svgd: False 
   use_sym_kl: False
   bound: 0.03
   distance: euclid
 data:
-  train_aug: False
-  dataset: caltech101
-  root: ../Z.Data/vtab-1k/caltech101
+  dataset: dmlab
+  root: ../vtab-1k/dmlab
   size: 224
   batch_size: 24
   workers: 4
+  train_aug: True
 model_checkpoint:
   dirpath: saved_checkpoints
   filename: best-step-{step}-{val_acc:.4f}
