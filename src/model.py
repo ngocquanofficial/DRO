@@ -452,26 +452,6 @@ class ClassificationModel(pl.LightningModule):
         print("TRAIN EPOCH END")
         epoch_duration = time.time() - self.epoch_start_time
         self.log("epoch_time", epoch_duration, prog_bar=True)
-    
-
-        current_val_acc = self.trainer.callback_metrics.get("val_acc", None)
-
-        if self.save_ckpt : 
-
-                
-            # Check if the current validation accuracy is the best
-            if current_val_acc is None:
-                return
-            
-            if current_val_acc > self.best_val_acc:
-                print(f"New best val_acc: {current_val_acc}, saving checkpoint.")
-                self.best_val_acc = current_val_acc
-
-                # Save the checkpoint
-                checkpoint_path = f"{self.optimizer}_best_val_acc.ckpt"
-                self.trainer.save_checkpoint(checkpoint_path)
-            else:
-                print(f"Current val_acc: {current_val_acc} did not exceed best val_acc: {self.best_val_acc}.")
 
     def on_test_epoch_end(self):
         """Save per-class accuracies to csv"""
