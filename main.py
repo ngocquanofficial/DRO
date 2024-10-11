@@ -23,8 +23,7 @@ class MyLightningCLI(LightningCLI):
                 "model_checkpoint.monitor": "val_acc",
                 "model_checkpoint.mode": "max",
                 "model_checkpoint.filename": "best-step-{step}-{val_acc:.4f}",
-                "model_checkpoint.save_last": True,
-                "model_checkpoint.save_on_train_epoch_end": True
+                "model_checkpoint.save_last": True
             }
         )
         parser.link_arguments("data.size", "model.image_size")
