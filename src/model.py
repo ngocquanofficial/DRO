@@ -492,20 +492,6 @@ class ClassificationModel(pl.LightningModule):
         df.to_csv("per-class-acc-test.csv")
         print("Saved per-class results in per-class-acc-test.csv")
 
-        # Retrieve the current validation accuracy
-        current_val_acc = self.trainer.callback_metrics.get("val_acc", None)
-        print(current_val_acc)
-        if current_val_acc is not None:
-            current_val_acc = current_val_acc.item()
-
-            # Save checkpoint if current val_acc is higher than the best recorded val_acc
-            if current_val_acc > self.best_val_acc:
-                print(f"New best val_acc: {current_val_acc}, saving checkpoint.")
-                self.best_val_acc = current_val_acc
-                self.trainer.save_checkpoint(f"best_val_acc_{current_val_acc}.ckpt")
-            else:
-                print(f"Current val_acc: {current_val_acc} did not exceed best val_acc: {self.best_val_acc}.")
-
 
     def configure_optimizers(self):
         # Initialize optimizer
