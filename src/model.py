@@ -98,7 +98,8 @@ class ClassificationModel(pl.LightningModule):
         distance= "fisher",
         bound= None,
         clip= 0.2,
-        alpha_div=0.02
+        alpha_div=0.02,
+        save_ckpt= False
 
     ):
         """Classification Model
@@ -177,6 +178,7 @@ class ClassificationModel(pl.LightningModule):
 
         self.best_val_acc = 0.0
         self.epoch_start_time= 0
+        self.save_ckpt = save_ckpt
 
 
         # Initialize network
@@ -428,20 +430,22 @@ class ClassificationModel(pl.LightningModule):
         self.epoch_start_time = time.time()
     
     def on_validation_epoch_end(self):
+        if self.save_ckpt :
 
-        # Retrieve the current validation accuracy
-        current_val_acc = self.trainer.callback_metrics.get("val_acc", None)
-        print(current_val_acc)
-        if current_val_acc is not None:
-            current_val_acc = current_val_acc.item()
+                
+            # Retrieve the current validation accuracy
+            current_val_acc = self.trainer.callback_metrics.get("val_acc", None)
+            print(current_val_acc)
+            if current_val_acc is not None:
+                current_val_acc = current_val_acc.item()
 
-            # Save checkpoint if current val_acc is higher than the best recorded val_acc
-            if current_val_acc > self.best_val_acc:
-                print(f"New best val_acc: {current_val_acc}, saving checkpoint.")
-                self.best_val_acc = current_val_acc
-                self.trainer.save_checkpoint(f"{self.optimizer}_best_val_acc_{current_val_acc}.ckpt")
-            else:
-                print(f"Current val_acc: {current_val_acc} did not exceed best val_acc: {self.best_val_acc}.")
+                # Save checkpoint if current val_acc is higher than the best recorded val_acc
+                if current_val_acc > self.best_val_acc:
+                    print(f"New best val_acc: {current_val_acc}, saving checkpoint.")
+                    self.best_val_acc = current_val_acc
+                    self.trainer.save_checkpoint(f"{self.optimizer}_best_val_acc_{current_val_acc}.ckpt")
+                else:
+                    print(f"Current val_acc: {current_val_acc} did not exceed best val_acc: {self.best_val_acc}.")
 
     def on_train_epoch_end(self):
         # Calculate elapsed time
@@ -452,16 +456,22 @@ class ClassificationModel(pl.LightningModule):
 
         current_val_acc = self.trainer.callback_metrics.get("val_acc", None)
 
-        # Check if the current validation accuracy is the best
-        if current_val_acc > self.best_val_acc:
-            print(f"New best val_acc: {current_val_acc}, saving checkpoint.")
-            self.best_val_acc = current_val_acc
+        if self.save_ckpt : 
 
-            # Save the checkpoint
-            checkpoint_path = f"{self.optimizer}_best_val_acc.ckpt"
-            self.trainer.save_checkpoint(checkpoint_path)
-        else:
-            print(f"Current val_acc: {current_val_acc} did not exceed best val_acc: {self.best_val_acc}.")
+                
+            # Check if the current validation accuracy is the best
+            if current_val_acc is None:
+                return
+            
+            if current_val_acc > self.best_val_acc:
+                print(f"New best val_acc: {current_val_acc}, saving checkpoint.")
+                self.best_val_acc = current_val_acc
+
+                # Save the checkpoint
+                checkpoint_path = f"{self.optimizer}_best_val_acc.ckpt"
+                self.trainer.save_checkpoint(checkpoint_path)
+            else:
+                print(f"Current val_acc: {current_val_acc} did not exceed best val_acc: {self.best_val_acc}.")
 
     def on_test_epoch_end(self):
         """Save per-class accuracies to csv"""

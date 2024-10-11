@@ -34,6 +34,7 @@ model:
   bound: 0.03
   distance: euclid
   clip: 0.12
+  save_ckpt: True
 data:
   train_aug: True
   dataset: svhn
