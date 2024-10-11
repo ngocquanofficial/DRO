@@ -24,6 +24,7 @@ class MyLightningCLI(LightningCLI):
                 "model_checkpoint.mode": "max",
                 "model_checkpoint.filename": "best-step-{step}-{val_acc:.4f}",
                 "model_checkpoint.save_last": True,
+                "model_checkpoint.save_on_train_epoch_end": True
             }
         )
         parser.link_arguments("data.size", "model.image_size")
@@ -41,7 +42,7 @@ cli = MyLightningCLI(
     save_config_kwargs={"overwrite": True},
     trainer_defaults={"check_val_every_n_epoch": None},
 )
-
+print(cli.config)
 # Copy the config into the experiment directory
 # Fix for https://github.com/Lightning-AI/lightning/issues/17168
 try:

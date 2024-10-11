@@ -19,7 +19,7 @@ from torchmetrics.classification.stat_scores import StatScores
 from transformers import AutoConfig, AutoModelForImageClassification
 from transformers.optimization import get_cosine_schedule_with_warmup
 import timm
-
+import time
 from src.loss import SoftTargetCrossEntropy
 from src.mixup import Mixup
 
@@ -174,6 +174,9 @@ class ClassificationModel(pl.LightningModule):
         self.bound = bound
         self.clip = clip
         self.alpha_div = alpha_div
+
+        self.best_val_acc = 0.0
+        self.epoch_start_time= 0
 
 
         # Initialize network
@@ -420,9 +423,50 @@ class ClassificationModel(pl.LightningModule):
     def test_step(self, batch, _):
         return self.shared_step(batch, "test")
 
+    def on_train_epoch_start(self):
+        # Capture the start time of the epoch
+        self.epoch_start_time = time.time()
+    
+    def on_validation_epoch_end(self):
+
+        # Retrieve the current validation accuracy
+        current_val_acc = self.trainer.callback_metrics.get("val_acc", None)
+        print(current_val_acc)
+        if current_val_acc is not None:
+            current_val_acc = current_val_acc.item()
+
+            # Save checkpoint if current val_acc is higher than the best recorded val_acc
+            if current_val_acc > self.best_val_acc:
+                print(f"New best val_acc: {current_val_acc}, saving checkpoint.")
+                self.best_val_acc = current_val_acc
+                self.trainer.save_checkpoint(f"{self.optimizer}_best_val_acc_{current_val_acc}.ckpt")
+            else:
+                print(f"Current val_acc: {current_val_acc} did not exceed best val_acc: {self.best_val_acc}.")
+
+    def on_train_epoch_end(self):
+        # Calculate elapsed time
+        print("TRAIN EPOCH END")
+        epoch_duration = time.time() - self.epoch_start_time
+        self.log("epoch_time", epoch_duration, prog_bar=True)
+    
+
+        current_val_acc = self.trainer.callback_metrics.get("val_acc", None)
+
+        # Check if the current validation accuracy is the best
+        if current_val_acc > self.best_val_acc:
+            print(f"New best val_acc: {current_val_acc}, saving checkpoint.")
+            self.best_val_acc = current_val_acc
+
+            # Save the checkpoint
+            checkpoint_path = f"{self.optimizer}_best_val_acc.ckpt"
+            self.trainer.save_checkpoint(checkpoint_path)
+        else:
+            print(f"Current val_acc: {current_val_acc} did not exceed best val_acc: {self.best_val_acc}.")
+
     def on_test_epoch_end(self):
         """Save per-class accuracies to csv"""
         # Aggregate all batch stats
+        print("HERE WE GO!!!!!!!!!!!!!!!")
         combined_stats = torch.sum(
             torch.stack(self.test_metric_outputs, dim=-1), dim=-1
         )
@@ -437,6 +481,21 @@ class ClassificationModel(pl.LightningModule):
         df = pd.DataFrame(per_class_acc, columns=["acc", "n"])
         df.to_csv("per-class-acc-test.csv")
         print("Saved per-class results in per-class-acc-test.csv")
+
+        # Retrieve the current validation accuracy
+        current_val_acc = self.trainer.callback_metrics.get("val_acc", None)
+        print(current_val_acc)
+        if current_val_acc is not None:
+            current_val_acc = current_val_acc.item()
+
+            # Save checkpoint if current val_acc is higher than the best recorded val_acc
+            if current_val_acc > self.best_val_acc:
+                print(f"New best val_acc: {current_val_acc}, saving checkpoint.")
+                self.best_val_acc = current_val_acc
+                self.trainer.save_checkpoint(f"best_val_acc_{current_val_acc}.ckpt")
+            else:
+                print(f"Current val_acc: {current_val_acc} did not exceed best val_acc: {self.best_val_acc}.")
+
 
     def configure_optimizers(self):
         # Initialize optimizer

@@ -5,42 +5,44 @@ trainer:
   logger:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
-      save_dir: output
-      name: dsprloc-lora-r8-lr-0.15-rho0.03_SAM-[17]
-  max_epochs: 150
+      save_dir: output/dro-updated-new
+      name: dtd
+  max_epochs: 1
   val_check_interval: 50
   num_sanity_val_steps: 0
 model:
+  sigma: 1.4
   model_name: vit-b16-224-dino
   training_mode: lora
-  optimizer: svgd
-  sigma: 1
-  lr: 0.15
+  optimizer: dro
+  lr: 0.2
   momentum: 0.9
   weight_decay: 0.0
   scheduler: cosine
   warmup_steps: 500
-  lora_r: 8
-  rho: 0.03
-  lora_alpha: 8
-  num_particles: 1
+  rho: 0.06
+  lora_r: 4
+  lora_alpha: 16
+  num_particles: 4
   cov_mat: True
   max_num_models: 20
   use_sam: True
-  start_swa_step: 65
-  swa_freq: 5
-  use_swa_svgd: False 
+  start_swa_step: 200
+  swa_freq: 1
+  use_swa_svgd: False
   use_sym_kl: False
+  bound: 0.03
+  distance: euclid
 data:
-  dataset: dsprites_loc
-  root: ../Z.Data/vtab-1k/dsprites_loc
-  size: 224
-  batch_size: 64
-  workers: 4
   train_aug: False
+  dataset: dtd
+  root: ../vtab-1k/dtd
+  size: 224
+  batch_size: 18
+  workers: 4
 model_checkpoint:
-  dirpath: saved_checkpoints
+  dirpath: ./saved_checkpoints
   filename: best-step-{step}-{val_acc:.4f}
   monitor: val_acc
   mode: max
-  save_last: true
+  save_last: True

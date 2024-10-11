@@ -5,8 +5,8 @@ trainer:
   logger:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
-      save_dir: output/dro-updated-new
-      name: dtd
+      save_dir: output/ablation
+      name: dtd-1particles
   max_epochs: 75
   val_check_interval: 50
   num_sanity_val_steps: 0
@@ -23,7 +23,7 @@ model:
   rho: 0.06
   lora_r: 4
   lora_alpha: 16
-  num_particles: 4
+  num_particles: 1
   cov_mat: True
   max_num_models: 20
   use_sam: True
@@ -33,6 +33,7 @@ model:
   use_sym_kl: False
   bound: 0.03
   distance: euclid
+  alpha_div: 0.02
 data:
   train_aug: False
   dataset: dtd
@@ -42,7 +43,7 @@ data:
   workers: 4
 model_checkpoint:
   dirpath: saved_checkpoints
-  filename: best-step-{step}-{val_acc:.4f}
+  filename: dtd-{step}-{val_acc:.4f}
   monitor: val_acc
   mode: max
-  save_last: True
+  save_last: true
