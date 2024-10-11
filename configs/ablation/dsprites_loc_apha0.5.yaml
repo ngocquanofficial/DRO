@@ -1,0 +1,50 @@
+# pytorch_lightning==2.0.2
+trainer:
+  accelerator: gpu
+  devices: 1
+  logger:
+    class_path: pytorch_lightning.loggers.CSVLogger
+    init_args:
+      save_dir: output/ablation
+      name: dsprites_loc-alpha0.5
+  max_epochs: 100
+  # max_steps: 10000
+  val_check_interval: 50
+  num_sanity_val_steps: 0
+model:
+  sigma: 1
+  model_name: vit-b16-224-dino
+  training_mode: lora
+  optimizer: dro
+  lr: 0.25
+  momentum: 0.9
+  weight_decay: 0.0
+  scheduler: cosine
+  warmup_steps: 500
+  rho: 0.05
+  lora_r: 8
+  lora_alpha: 8
+  num_particles: 4
+  cov_mat: False
+  max_num_models: 20
+  use_sam: True
+  start_swa_step: 200
+  swa_freq: 5
+  use_swa_svgd: False 
+  use_sym_kl: False
+  bound: 0.03
+  distance: euclid
+  alpha_div: 0.5
+data:
+  train_aug: False
+  dataset: dsprites_loc
+  root: ../vtab-1k/dsprites_loc
+  size: 224
+  batch_size: 24
+  workers: 4
+model_checkpoint:
+  dirpath: saved_checkpoints/ablation
+  filename: dspritesloc-{step}-{val_acc:.4f}
+  monitor: val_acc
+  mode: max
+  save_last: true
