@@ -11,7 +11,6 @@ trainer:
   val_check_interval: 50
   num_sanity_val_steps: 0
 model:
-  sigma: 1
   model_name: vit-b16-224-dino
   training_mode: lora
   optimizer: dro
@@ -20,17 +19,10 @@ model:
   weight_decay: 0.0
   scheduler: cosine
   warmup_steps: 500
-  rho: 0
+  # rho: 0
   lora_r: 8
   lora_alpha: 8
   num_particles: 4
-  cov_mat: True
-  max_num_models: 20
-  use_sam: False
-  start_swa_step: 200
-  swa_freq: 1
-  use_swa_svgd: False
-  use_sym_kl: False
   bound: 0.03
   distance: euclid
   clip: 0.12
@@ -47,4 +39,4 @@ model_checkpoint:
   filename: best-step-{step}-{val_acc:.4f}
   monitor: val_acc
   mode: max
-  save_last: true
+  save_last: True

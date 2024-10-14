@@ -9,7 +9,7 @@ import random
 print("FINISH IMPORTING")
 # Load the trained model checkpoint
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-checkpoint_path = "/home/ubuntu/newDRO/dro_best_val_acc_0.9950000047683716.ckpt"  # Replace with your actual path
+checkpoint_path = "/home/ubuntu/newDRO/dro_best_val_acc_1.0.ckpt"  # Replace with your actual path
 model = ClassificationModel.load_from_checkpoint(checkpoint_path)
 model.eval()
 model.to(device)
@@ -66,7 +66,7 @@ def main(true_label= 0) :
                     for i, output in enumerate(outputs):
                         predictions_per_model[i].append(output[correct_indices])
 
-
+    print(total_true_sample)
 
 
     # Calculate the average prediction per model for samples with label=0
@@ -76,6 +76,7 @@ def main(true_label= 0) :
             # Concatenate the predictions to make a single tensor with shape [N, 100]
             stacked_predictions = torch.cat(predictions, dim=0)  # Concatenate along the batch dimension
             print(stacked_predictions.shape)
+            print(f"Accuracy for class {true_label} ", stacked_predictions.shape[0]/total_true_sample)
             avg_prediction = torch.mean(stacked_predictions, dim=0)
             print(avg_prediction.shape)
             avg_predictions_per_model.append(avg_prediction)
@@ -84,13 +85,25 @@ def main(true_label= 0) :
 
 
     # Plotting histograms for each model based on the average prediction
-    fig, axes = plt.subplots(2, 2, figsize=(20, 12))  # 2x2 grid of subplots
+    fig, axes = plt.subplots(2, 2, figsize=(15, 10))  # 2x2 grid of subplots
 
     # Define colors and edge styles
     bar_color = '#f0f0f0'  # Very light gray, nearly white
     bar_edge_color = 'black'
     highlight_color = 'skyblue'
     highlight_edge_color = 'black'
+    
+    # Set larger font sizes using rcParams
+    plt.rcParams.update({
+        'axes.titlesize': 16,     # Font size for the title
+        'axes.labelsize': 14,     # Font size for x and y labels
+        'xtick.labelsize': 23,    # Font size for x-axis tick labels
+        'ytick.labelsize': 23,    # Font size for y-axis tick labels
+        'legend.fontsize': 12     # Font size for the legend
+    })
+    from matplotlib import font_manager
+    # Define a bold font
+    bold_font = font_manager.FontProperties(weight='bold', size=23)
 
     for i, avg_prediction in enumerate(avg_predictions_per_model):
         if avg_prediction is not None:
@@ -104,61 +117,32 @@ def main(true_label= 0) :
 
             # Plot the histogram bars
             bars = axes[row, col].bar(
-                range(len(prob)), prob, color=bar_color, edgecolor=bar_edge_color, label='Prediction Probabilities', linewidth= 2
+                range(len(prob)), prob, color=bar_color, edgecolor=bar_edge_color, label='', linewidth= 2
             )
 
             # Highlight the true label bar
             bars[true_label].set_color(highlight_color)
             bars[true_label].set_edgecolor(highlight_edge_color)
 
+            # Set larger tick labels for x and y axes
+            axes[row, col].tick_params(axis='x', labelsize=23)  # Increase x-axis tick labels size
+            axes[row, col].tick_params(axis='y', labelsize=23)  # Increase y-axis tick labels size
+
+
             # Set titles and labels
-            axes[row, col].set_xlabel('Class Index')
-            axes[row, col].set_ylabel('Probability')
-            axes[row, col].set_title(f'Model {i+1} Average Prediction Probability Histogram for Label 0')
+            axes[row, col].set_xlabel('')
+            axes[row, col].set_ylabel('')
+            axes[row, col].set_title(f'')
             axes[row, col].legend()
 
     plt.tight_layout()
-    plt.savefig(f"./images/class{true_label}.png")
+    plt.savefig(f"./images/class{true_label}.pdf")
     plt.show()
 
 
 
 
 
-
-
-
-    # Calculate the final average prediction across all models
-    if len(avg_predictions_per_model) > 0:
-        # Stack the average predictions and calculate the mean across models
-        final_avg_prediction = torch.mean(torch.stack(avg_predictions_per_model), dim=0)
-
-        # Normalize the probabilities
-        prob = final_avg_prediction - final_avg_prediction.min()  # Subtract the min value
-        prob = prob / prob.sum()  # Divide by the sum to get the probabilities
-        prob = prob.cpu().numpy()  # Convert to numpy array
-
-        # Create a new figure for the final average prediction histogram
-        fig, ax = plt.subplots(figsize=(8, 6))
-
-        # Plot the histogram bars
-        bars = ax.bar(
-            range(len(prob)), prob, color=bar_color, edgecolor=bar_edge_color, label='Final Average Prediction Probabilities', linewidth=2
-        )
-
-        # Highlight the true label bar
-        bars[true_label].set_color(highlight_color)
-        bars[true_label].set_edgecolor(highlight_edge_color)
-
-        # Set titles and labels
-        ax.set_xlabel('Class Index')
-        ax.set_ylabel('Probability')
-        ax.set_title(f'Final Average Prediction Probability Histogram for Label {true_label}')
-        ax.legend()
-
-        plt.tight_layout()
-        plt.savefig(f"./images/final_class{true_label}.png")
-        plt.show()
 
 
 
@@ -194,5 +178,7 @@ def main(true_label= 0) :
     # plt.show()
 
 
-for i in reversed(range(10)) :
-    main(i)
+# for i in reversed(range(10)) :
+#     main(i)
+
+main(7)

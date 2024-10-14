@@ -27,7 +27,6 @@ from .lora import LoRA_ViT
 from .base_vit2 import ViT, CustomLinear, CustomLinear2
 from .swag import SWAG, bn_update
 from src.utils import log_det, fisher_distance, cal_cosine_similarity, euclid_distance
-# from .base_vit import ViT, CustomLinear
 
 torch.autograd.set_detect_anomaly(True)
 
@@ -58,14 +57,12 @@ class ClassificationModel(pl.LightningModule):
         self,
         model_name: str = "vit-b16-224-in21k",
         optimizer: str = "sgd",
-        rho: float= 0.05,
         lr: float = 1e-2,
         betas: Tuple[float, float] = (0.9, 0.999),
         momentum: float = 0.9,
         weight_decay: float = 0.0,
         scheduler: str = "cosine",
         warmup_steps: int = 0,
-        num_cycles: float = 0.5,
         n_classes: int = 10,
         mixup_alpha: float = 0.0,
         cutmix_alpha: float = 0.0,
@@ -81,19 +78,9 @@ class ClassificationModel(pl.LightningModule):
         lora_bias: str = "none",
         from_scratch: bool = False,
         num_particles: int = 10,
-        use_sam: bool = False,
         weights_path: str = 'checkpoint/B_16.pth',
-        epsilon: float = 0.01,
-        cov_mat: bool = True,
-        max_num_models: int = 20,
-        start_swa_step: int = 10000,
-        swa_freq: int = 10,
-        use_swa_svgd: bool = False,
-        use_sym_kl: bool = False,
-        sigma = 1,
 
-        # DRO
-        grad_loop: int = 3,
+        rho: float= 0.05,
         lamda = 3,
         distance= "fisher",
         bound= None,
@@ -141,7 +128,7 @@ class ClassificationModel(pl.LightningModule):
         self.weight_decay = weight_decay
         self.scheduler = scheduler
         self.warmup_steps = warmup_steps
-        self.num_cycles = num_cycles
+        # self.num_cycles = num_cycles
         self.n_classes = n_classes
         self.mixup_alpha = mixup_alpha
         self.cutmix_alpha = cutmix_alpha
@@ -157,24 +144,25 @@ class ClassificationModel(pl.LightningModule):
         self.lora_bias = lora_bias
         self.from_scratch = from_scratch
         self.num_particles =  num_particles
-        self.use_sam = use_sam
-        self.epsilon = epsilon
-        self.cov_mat = cov_mat
-        self.max_num_models = max_num_models
-        self.start_swag_step = start_swa_step
-        self.swa_freq = swa_freq
-        self.use_swa_svgd =  use_swa_svgd
-        self.use_sym_kl = use_sym_kl
-        self.sigma = sigma
+        # self.use_sam = use_sam
+        # self.epsilon = epsilon
+        # self.cov_mat = cov_mat
+        # self.max_num_models = max_num_models
+        # self.start_swag_step = start_swa_step
+        # self.swa_freq = swa_freq
+        # self.use_swa_svgd =  use_swa_svgd
+        # self.use_sym_kl = use_sym_kl
+        # self.sigma = sigma
 
 
         #DRO
-        self.grad_loop = grad_loop
         self.lamda = torch.tensor(float(lamda), requires_grad=False).to("cuda")
         self.distance = distance
         self.bound = bound
         self.clip = clip
         self.alpha_div = alpha_div
+
+
 
         self.best_val_acc = 0.0
         self.epoch_start_time= 0
@@ -190,7 +178,6 @@ class ClassificationModel(pl.LightningModule):
             )
 
         print('Model name', self.model_name)
-        # self.net = ViT(name='B_16_imagenet1k', pretrained=True, num_classes=self.n_classes, image_size=self.image_size, num_particles=self.num_particles)
         self.net = ViT(name='vit-b16-224-in21k', pretrained=True, num_classes=self.n_classes, image_size=self.image_size, num_particles=self.num_particles, weight_path=weights_path)
         
         self.net = self.net.cuda()
@@ -237,33 +224,18 @@ class ClassificationModel(pl.LightningModule):
         self.train_metrics = MetricCollection(
             {
                 "acc": Accuracy(num_classes=self.n_classes, task="multiclass", top_k=1),
-                # "acc_top5": Accuracy(
-                #     num_classes=self.n_classes,
-                #     task="multiclass",
-                #     top_k=min(5, self.n_classes),
-                # ),
                 # "ece": CalibrationError(num_classes=self.n_classes, norm='l1').to("cpu")
             }
         )
         self.val_metrics = MetricCollection(
             {
                 "acc": Accuracy(num_classes=self.n_classes, task="multiclass", top_k=1),
-                # "acc_top5": Accuracy(
-                #     num_classes=self.n_classes,
-                #     task="multiclass",
-                #     top_k=min(5, self.n_classes),
-                # ),
                 "ece": CalibrationError(num_classes=self.n_classes, norm='l1').to("cpu")
             }
         )
         self.test_metrics = MetricCollection(
             {
                 "acc": Accuracy(num_classes=self.n_classes, task="multiclass", top_k=1),
-                # "acc_top5": Accuracy(
-                #     num_classes=self.n_classes,
-                #     task="multiclass",
-                #     top_k=min(5, self.n_classes),
-                # ),
                 "ece": CalibrationError(num_classes=self.n_classes, norm='l1').to("cpu"),
                 "stats": StatScores(
                     task="multiclass", average=None, num_classes=self.n_classes
@@ -323,6 +295,7 @@ class ClassificationModel(pl.LightningModule):
         elif self.optimizer == 'dro' :
             loss = entropy_loss  + self.alpha_div * div_loss
         
+
         # Get accuracy
         metrics = getattr(self, f"{mode}_metrics")(pred_, y.argmax(1))
 
@@ -375,7 +348,7 @@ class ClassificationModel(pl.LightningModule):
 
         elif self.optimizer == 'dro' :
                 
-            # STEP 1 (same as SAM)
+            # STEP 1 
             loss, original_output = self.shared_step(batch, "train")
 
             opt.zero_grad()
@@ -414,54 +387,49 @@ class ClassificationModel(pl.LightningModule):
 
     def validation_step(self, batch, _):
         val = self.shared_step(batch, "val")
-        # self.test_step(batch, _)
         return val
     
-    def on_validation_epoch_end(self):
-        test_dataloader = self.trainer.datamodule.test_dataloader()
-        for batch in test_dataloader:
-            self.test_step(batch, 0)
             
     def test_step(self, batch, _):
         return self.shared_step(batch, "test")
 
-    def on_train_epoch_start(self):
-        # Capture the start time of the epoch
-        self.epoch_start_time = time.time()
-    
 
+
+# Train epoch start&end
+    def on_train_epoch_start(self):
+        self.epoch_start_time = time.time()
+
+    def on_train_epoch_end(self):
+        epoch_duration = time.time() - self.epoch_start_time
+        self.log("epoch_time", epoch_duration, prog_bar=True)
+
+# validation epoch start&end
     def on_validation_epoch_end(self):
+        test_dataloader = self.trainer.datamodule.test_dataloader()
+        for batch in test_dataloader:
+            self.test_step(batch, 0)
+
+
         if self.save_ckpt:
-            # Retrieve the current validation accuracy
             current_val_acc = self.trainer.callback_metrics.get("val_acc", None)
             print(current_val_acc)
 
             if current_val_acc is not None:
                 current_val_acc = current_val_acc.item()
 
-                # Check if the epoch number is divisible by 10
-                current_epoch = self.trainer.current_epoch
-                if current_epoch % 5 == 0 and current_epoch > 40 :
-                    # Save checkpoint if current val_acc is higher than the best recorded val_acc
-                    if current_val_acc > self.best_val_acc:
-                        print(f"Epoch {current_epoch}: New best val_acc: {current_val_acc}, saving checkpoint.")
-                        self.best_val_acc = current_val_acc
-                        self.trainer.save_checkpoint(f"{self.optimizer}_epoch_{current_epoch}_best_val_acc_{current_val_acc}.ckpt")
-                    else:
-                        print(f"Epoch {current_epoch}: Current val_acc: {current_val_acc} did not exceed best val_acc: {self.best_val_acc}.")
+                if current_val_acc >= self.best_val_acc:
+                    print(f"Epoch {current_epoch}: New best val_acc: {current_val_acc}, saving checkpoint.")
+                    self.best_val_acc = current_val_acc
+                    self.trainer.save_checkpoint(f"{self.optimizer}_epoch_{current_epoch}_best_val_acc_{current_val_acc}.ckpt")
                 else:
-                    print(f"Epoch {current_epoch}: Skipping checkpoint save as it's not divisible by 10.")
+                    print(f"Epoch {current_epoch}: Current val_acc: {current_val_acc} did not exceed best val_acc: {self.best_val_acc}.")
+            else:
+                print(f"Epoch {current_epoch}: Skipping checkpoint save as it's not divisible by 10.")
 
-    def on_train_epoch_end(self):
-        # Calculate elapsed time
-        print("TRAIN EPOCH END")
-        epoch_duration = time.time() - self.epoch_start_time
-        self.log("epoch_time", epoch_duration, prog_bar=True)
 
     def on_test_epoch_end(self):
         """Save per-class accuracies to csv"""
         # Aggregate all batch stats
-        print("HERE WE GO!!!!!!!!!!!!!!!")
         combined_stats = torch.sum(
             torch.stack(self.test_metric_outputs, dim=-1), dim=-1
         )
@@ -483,15 +451,12 @@ class ClassificationModel(pl.LightningModule):
 
         if self.optimizer == "dro":  #use Adam as the base optimizer by default @@        
             base_optimizer = torch.optim.SGD
-
-            # optimizer =  DRO(param = self.net.parameters(),base_optimizer= base_optimizer, lr=self.lr, betas=self.betas,
-            #     weight_decay=self.weight_decay, num_particles=self.num_particles, train_module=self, net=self.net, rho= self.rho)
-            optimizer = DRO(self.net.parameters(), base_optimizer, lr= self.lr, momentum=0.9)
+            optimizer = DRO(self.net.parameters(), base_optimizer, lr= self.lr, momentum= self.momentum)
 
 
         elif self.optimizer == 'sam' :
             base_optimizer = torch.optim.SGD
-            optimizer = SAM(self.net.parameters(), base_optimizer, lr= self.lr, momentum=0.9)
+            optimizer = SAM(self.net.parameters(), base_optimizer, lr= self.lr, momentum= self.momentum)
 
         else:
             raise ValueError(
