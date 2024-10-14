@@ -19,18 +19,10 @@ model:
   weight_decay: 0.0
   scheduler: cosine
   warmup_steps: 500
-  rho: 0
-  sigma: 1
+  rho: 0.06
   lora_r: 8
   lora_alpha: 8
   num_particles: 4
-  cov_mat: True
-  max_num_models: 20
-  use_sam: True
-  start_swa_step: 200
-  swa_freq: 1
-  use_swa_svgd: False
-  use_sym_kl: False
   bound: 0.03
   distance: fisher
 

@@ -10,7 +10,6 @@ from peft import LoraConfig, get_peft_model
 from torch.optim import SGD, Adam, AdamW
 from .utils import DRO, SAM
 from torch.optim.lr_scheduler import LambdaLR
-from torch.optim.swa_utils import AveragedModel, SWALR
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torchmetrics import MetricCollection
 from torchmetrics.classification.accuracy import Accuracy
@@ -25,7 +24,6 @@ from src.mixup import Mixup
 
 from .lora import LoRA_ViT
 from .base_vit2 import ViT, CustomLinear, CustomLinear2
-from .swag import SWAG, bn_update
 from src.utils import log_det, fisher_distance, cal_cosine_similarity, euclid_distance
 
 torch.autograd.set_detect_anomaly(True)
@@ -115,6 +113,15 @@ class ClassificationModel(pl.LightningModule):
             lora_dropout: Dropout probability for LoRA layers
             lora_bias: Whether to train biases during LoRA. One of ['none', 'all' or 'lora_only']
             from_scratch: Initialize network with random weights instead of a pretrained checkpoint
+            num_particles: Number of particles for ensemble
+            weights_path: path to the checkpoint
+
+            lamda: the constant control the trade-off between maximizing inner loss and perturb distance in the loss function
+            distance: distance type, only receive value belongs to {"euclid", "fisher"}
+            bound: the bound for the perturb point has no penalty.
+            clip: gradient clipping constant
+            alpha_div: weight of the divergence loss in the total loss
+            save_ckpt: save checkpoint or not
         """
         super().__init__()
         # self.automatic_optimization = False
@@ -128,7 +135,6 @@ class ClassificationModel(pl.LightningModule):
         self.weight_decay = weight_decay
         self.scheduler = scheduler
         self.warmup_steps = warmup_steps
-        # self.num_cycles = num_cycles
         self.n_classes = n_classes
         self.mixup_alpha = mixup_alpha
         self.cutmix_alpha = cutmix_alpha
@@ -144,16 +150,6 @@ class ClassificationModel(pl.LightningModule):
         self.lora_bias = lora_bias
         self.from_scratch = from_scratch
         self.num_particles =  num_particles
-        # self.use_sam = use_sam
-        # self.epsilon = epsilon
-        # self.cov_mat = cov_mat
-        # self.max_num_models = max_num_models
-        # self.start_swag_step = start_swa_step
-        # self.swa_freq = swa_freq
-        # self.use_swa_svgd =  use_swa_svgd
-        # self.use_sym_kl = use_sym_kl
-        # self.sigma = sigma
-
 
         #DRO
         self.lamda = torch.tensor(float(lamda), requires_grad=False).to("cuda")
@@ -161,8 +157,6 @@ class ClassificationModel(pl.LightningModule):
         self.bound = bound
         self.clip = clip
         self.alpha_div = alpha_div
-
-
 
         self.best_val_acc = 0.0
         self.epoch_start_time= 0
@@ -224,7 +218,7 @@ class ClassificationModel(pl.LightningModule):
         self.train_metrics = MetricCollection(
             {
                 "acc": Accuracy(num_classes=self.n_classes, task="multiclass", top_k=1),
-                # "ece": CalibrationError(num_classes=self.n_classes, norm='l1').to("cpu")
+                # "ece": CalibrationError(num_classes=self.n_classes, norm='l1').to("cpu")  # Avoid of of CUDA memory
             }
         )
         self.val_metrics = MetricCollection(
