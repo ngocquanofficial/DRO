@@ -5,32 +5,32 @@ trainer:
   logger:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
-      save_dir: output/dro-rebuttal
-      name: flower
+      save_dir: output/dro-rebuttal-nodiv
+      name: dtd
   max_epochs: 150
-  # max_steps: 10000
   val_check_interval: 50
   num_sanity_val_steps: 0
 model:
   model_name: vit-b16-224-dino
   training_mode: lora
   optimizer: dro
-  lr: 0.75
+  lr: 0.2
   momentum: 0.9
   weight_decay: 0.0
   scheduler: cosine
   warmup_steps: 500
-  rho: 0.03
-  lora_r: 8
-  lora_alpha: 8
+  rho: 0.06
+  lora_r: 4
+  lora_alpha: 16
   num_particles: 4
-  bound: 0.05
+  bound: 0.03
   distance: euclid
-  dataset_name: flower
+  dataset_name: dtd
+  alpha_div: 0
 data:
-  train_aug: True
-  dataset: flowers102
-  root: ../vtab-1k/oxford_flowers102
+  train_aug: False
+  dataset: dtd
+  root: ../vtab-1k/dtd
   size: 224
   batch_size: 64
   workers: 4
@@ -39,4 +39,4 @@ model_checkpoint:
   filename: best-step-{step}-{val_acc:.4f}
   monitor: val_acc
   mode: max
-  save_last: true
+  save_last: True

@@ -5,8 +5,8 @@ trainer:
   logger:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
-      save_dir: output/dro-rebuttal
-      name: flower
+      save_dir: output/dro-rebuttal-nodiv
+      name: eurosat
   max_epochs: 150
   # max_steps: 10000
   val_check_interval: 50
@@ -15,22 +15,23 @@ model:
   model_name: vit-b16-224-dino
   training_mode: lora
   optimizer: dro
-  lr: 0.75
+  lr: 0.5
   momentum: 0.9
-  weight_decay: 0.0
+  weight_decay: 1e-4
   scheduler: cosine
   warmup_steps: 500
-  rho: 0.03
+  rho: 0.05
   lora_r: 8
   lora_alpha: 8
   num_particles: 4
-  bound: 0.05
+  bound: 0.1
   distance: euclid
-  dataset_name: flower
+  clip: 0.2
+  dataset_name: eurosat
+  alpha_div: 0
 data:
-  train_aug: True
-  dataset: flowers102
-  root: ../vtab-1k/oxford_flowers102
+  dataset: eurosat
+  root: ../vtab-1k/eurosat
   size: 224
   batch_size: 64
   workers: 4

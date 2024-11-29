@@ -5,13 +5,12 @@ trainer:
   logger:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
-      save_dir: output/dro-updated-new
+      save_dir: output/dro-rebuttal
       name: dtd
-  max_epochs: 75
+  max_epochs: 150
   val_check_interval: 50
   num_sanity_val_steps: 0
 model:
-  sigma: 1.4
   model_name: vit-b16-224-dino
   training_mode: lora
   optimizer: dro
@@ -24,21 +23,15 @@ model:
   lora_r: 4
   lora_alpha: 16
   num_particles: 4
-  cov_mat: True
-  max_num_models: 20
-  use_sam: True
-  start_swa_step: 200
-  swa_freq: 1
-  use_swa_svgd: False
-  use_sym_kl: False
   bound: 0.03
   distance: euclid
+  dataset_name: dtd
 data:
   train_aug: False
   dataset: dtd
   root: ../vtab-1k/dtd
   size: 224
-  batch_size: 24
+  batch_size: 64
   workers: 4
 model_checkpoint:
   dirpath: saved_checkpoints

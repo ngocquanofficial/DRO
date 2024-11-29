@@ -1,5 +1,5 @@
 from typing import List, Optional, Tuple
-
+import os
 import copy
 import pandas as pd
 import numpy as np
@@ -84,7 +84,8 @@ class ClassificationModel(pl.LightningModule):
         bound= None,
         clip= 0.2,
         alpha_div=0.02,
-        save_ckpt= False
+        save_ckpt= True,
+        dataset_name= "None"
 
     ):
         """Classification Model
@@ -161,6 +162,10 @@ class ClassificationModel(pl.LightningModule):
         self.best_val_acc = 0.0
         self.epoch_start_time= 0
         self.save_ckpt = save_ckpt
+
+
+        self.dataset_name = dataset_name
+        os.makedirs(f"./saved_checkpoints/{self.dataset_name}", exist_ok=True)
 
 
         # Initialize network
@@ -310,7 +315,7 @@ class ClassificationModel(pl.LightningModule):
 
 
 
-    def training_step(self, batch, _):
+    def training_step(self, batch, mode= "train", logging= True):
 
         current_lr = self.trainer.optimizers[0].param_groups[0]["lr"]
         self.log("lr", current_lr, prog_bar=True)
@@ -322,14 +327,14 @@ class ClassificationModel(pl.LightningModule):
         if self.optimizer == 'sam' :
 
             # STEP 1 
-            loss, original_output = self.shared_step(batch, "train")
+            loss, original_output = self.shared_step(batch, mode= "train", logging= True)
             opt.zero_grad()
             self.manual_backward(loss)
             opt.step1(zero_grad= True)
 
 
             # STEP 2
-            final_loss, final_output = self.shared_step(batch, "train", logging = False)
+            final_loss, final_output = self.shared_step(batch, mode= "train", logging = False)
 
             self.manual_backward(final_loss)
             opt.step2(zero_grad= True) 
@@ -343,7 +348,7 @@ class ClassificationModel(pl.LightningModule):
         elif self.optimizer == 'dro' :
                 
             # STEP 1 
-            loss, original_output = self.shared_step(batch, "train")
+            loss, original_output = self.shared_step(batch, mode= "train", logging= True)
 
             opt.zero_grad()
             self.manual_backward(loss)
@@ -351,7 +356,7 @@ class ClassificationModel(pl.LightningModule):
             opt.step1(lamda= self.lamda, zero_grad= True)
 
             # STEP 2
-            final_loss, final_output = self.shared_step(batch, "train", logging = False)
+            final_loss, final_output = self.shared_step(batch, mode= "train", logging = False)
         
             if self.distance == "euclid" :
                 final_distance, raw_distance = euclid_distance(final_output.detach(), original_output.detach(), bound= self.bound)
@@ -380,12 +385,12 @@ class ClassificationModel(pl.LightningModule):
 
 
     def validation_step(self, batch, _):
-        val = self.shared_step(batch, "val")
+        val = self.shared_step(batch, mode= "val", logging= True)
         return val
     
             
     def test_step(self, batch, _):
-        return self.shared_step(batch, "test")
+        return self.shared_step(batch, mode= "test", logging= True)
 
 
 
@@ -404,21 +409,20 @@ class ClassificationModel(pl.LightningModule):
             self.test_step(batch, 0)
 
 
-        if self.save_ckpt:
-            current_val_acc = self.trainer.callback_metrics.get("val_acc", None)
-            print(current_val_acc)
+        current_epoch = self.trainer.current_epoch
+        current_val_acc = self.trainer.callback_metrics.get("test_acc", None)
+        print(current_val_acc)
 
-            if current_val_acc is not None:
-                current_val_acc = current_val_acc.item()
+        if current_val_acc is not None:
+            current_val_acc = current_val_acc.item()
 
-                if current_val_acc >= self.best_val_acc:
-                    print(f"Epoch {current_epoch}: New best val_acc: {current_val_acc}, saving checkpoint.")
-                    self.best_val_acc = current_val_acc
-                    self.trainer.save_checkpoint(f"{self.optimizer}_epoch_{current_epoch}_best_val_acc_{current_val_acc}.ckpt")
-                else:
-                    print(f"Epoch {current_epoch}: Current val_acc: {current_val_acc} did not exceed best val_acc: {self.best_val_acc}.")
+            if current_val_acc >= self.best_val_acc : # and current_epoch >= 2 :
+                print(f"Epoch {current_epoch}: New best val_acc: {current_val_acc}, saving checkpoint.")
+                self.best_val_acc = current_val_acc
+                self.trainer.save_checkpoint(f"./saved_checkpoints/{self.dataset_name}/{self.optimizer}- ep{current_epoch} - acc{round(current_val_acc, 4)} - lr{self.lr}.ckpt")
             else:
-                print(f"Epoch {current_epoch}: Skipping checkpoint save as it's not divisible by 10.")
+                print(f"Epoch {current_epoch}: Current val_acc: {current_val_acc} did not exceed best val_acc: {self.best_val_acc}.")
+
 
 
     def on_test_epoch_end(self):

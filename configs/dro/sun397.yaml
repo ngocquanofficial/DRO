@@ -5,13 +5,12 @@ trainer:
   logger:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
-      save_dir: output/dro-updated-new
+      save_dir: output/dro-rebuttal
       name: sun397
-  max_epochs: 75
+  max_epochs: 150
   val_check_interval: 50
   num_sanity_val_steps: 0
 model:
-  sigma: 1.4
   model_name: vit-b16-224-dino
   training_mode: lora
   optimizer: dro
@@ -21,24 +20,18 @@ model:
   scheduler: cosine
   warmup_steps: 500
   rho: 0.06
-  lora_r: 4
-  lora_alpha: 16
+  lora_r: 8
+  lora_alpha: 8
   num_particles: 4
-  cov_mat: True
-  max_num_models: 20
-  use_sam: True
-  start_swa_step: 200
-  swa_freq: 1
-  use_swa_svgd: False
-  use_sym_kl: False
   bound: 0.03
   distance: euclid
+  dataset_name: sun397
 data:
-  train_aug: False
+  train_aug: True
   dataset: SUN397
   root: ../vtab-1k/sun397
   size: 224
-  batch_size: 24
+  batch_size: 64
   workers: 4
 model_checkpoint:
   dirpath: saved_checkpoints
