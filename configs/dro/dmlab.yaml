@@ -16,7 +16,6 @@ model:
   training_mode: lora
   optimizer: dro
   lr: 0.25
-  sigma: 1
   momentum: 0.9
   weight_decay: 0.0
   scheduler: cosine
@@ -25,13 +24,6 @@ model:
   lora_r: 8
   lora_alpha: 8
   num_particles: 4
-  cov_mat: True
-  max_num_models: 20
-  use_sam: True
-  start_swa_step: 200
-  swa_freq: 5
-  use_swa_svgd: False 
-  use_sym_kl: False
   bound: 0.03
   distance: euclid
   clip: 0.12
@@ -39,7 +31,7 @@ data:
   dataset: dmlab
   root: ../vtab-1k/dmlab
   size: 224
-  batch_size: 24
+  batch_size: 48
   workers: 4
   train_aug: True
 model_checkpoint:

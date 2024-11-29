@@ -25,7 +25,7 @@ from src.mixup import Mixup
 
 from .lora import LoRA_ViT
 from .base_vit2 import ViT, CustomLinear, CustomLinear2
-from .swag import SWAG, bn_update
+# from .swag import SWAG, bn_update
 from src.utils import log_det, fisher_distance, cal_cosine_similarity, euclid_distance
 
 torch.autograd.set_detect_anomaly(True)
@@ -301,6 +301,9 @@ class ClassificationModel(pl.LightningModule):
 
 
         # Log
+        if mode == "test":
+            self.test_metric_outputs.append(metrics["stats"])
+            
         if logging :
             self.log(f"{mode}_DIV_LOSS", div_loss.item(), on_epoch=True)
             self.log(f"{mode}_loss", loss.item(), on_epoch=True)
@@ -308,15 +311,12 @@ class ClassificationModel(pl.LightningModule):
                 if len(v.size()) == 0:
                     self.log(f"{mode}_{k.lower()}", v, on_epoch=True)
 
-
-        if mode == "test":
-            self.test_metric_outputs.append(metrics["stats"])
         
         return loss, pred_
 
 
 
-    def training_step(self, batch, _):
+    def training_step(self, batch, mode, logging= True):
 
         current_lr = self.trainer.optimizers[0].param_groups[0]["lr"]
         self.log("lr", current_lr, prog_bar=True)
@@ -328,7 +328,7 @@ class ClassificationModel(pl.LightningModule):
         if self.optimizer == 'sam' :
 
             # STEP 1 
-            loss, original_output = self.shared_step(batch, "train")
+            loss, original_output = self.shared_step(batch, "train", logging= True)
             opt.zero_grad()
             self.manual_backward(loss)
             opt.step1(zero_grad= True)
@@ -349,7 +349,7 @@ class ClassificationModel(pl.LightningModule):
         elif self.optimizer == 'dro' :
                 
             # STEP 1 
-            loss, original_output = self.shared_step(batch, "train")
+            loss, original_output = self.shared_step(batch, mode= "train", logging = True)
 
             opt.zero_grad()
             self.manual_backward(loss)
@@ -357,7 +357,7 @@ class ClassificationModel(pl.LightningModule):
             opt.step1(lamda= self.lamda, zero_grad= True)
 
             # STEP 2
-            final_loss, final_output = self.shared_step(batch, "train", logging = False)
+            final_loss, final_output = self.shared_step(batch, mode= "train", logging = False)
         
             if self.distance == "euclid" :
                 final_distance, raw_distance = euclid_distance(final_output.detach(), original_output.detach(), bound= self.bound)
@@ -386,12 +386,12 @@ class ClassificationModel(pl.LightningModule):
 
 
     def validation_step(self, batch, _):
-        val = self.shared_step(batch, "val")
+        val = self.shared_step(batch, "val", logging= True)
         return val
     
             
     def test_step(self, batch, _):
-        return self.shared_step(batch, "test")
+        return self.shared_step(batch, "test", logging= True)
 
 
 
