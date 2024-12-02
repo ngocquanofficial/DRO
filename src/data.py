@@ -25,6 +25,10 @@ from torchvision.datasets import (
     ImageFolder
 )
 
+from dataload.json_dataset import (
+    CUB200Dataset, CarsDataset, DogsDataset, FlowersDataset, NabirdsDataset
+)
+from dataload.loader import *
 from PIL import Image
 
 DATASET_DICT = {
@@ -174,6 +178,21 @@ DATASET_DICT = {
     ],
 }
 
+
+_DATASET_CATALOG = {
+    "CUB_200_2011": CUB200Dataset,
+    'OxfordFlower': FlowersDataset,
+    'StanfordCars': CarsDataset,
+    'StanfordDogs': DogsDataset,
+    "nabirds": NabirdsDataset,
+}
+
+
+
+
+
+
+
 def default_loader(path):
     return Image.open(path).convert('RGB')
 
@@ -268,6 +287,7 @@ class DataModule(pl.LightningDataModule):
         self.batch_size = batch_size
         self.workers = workers
         self.train_aug = train_aug
+        self.num_classes = self.get_num_classes()
 
         # Define dataset
         if self.dataset == "custom":
@@ -286,7 +306,8 @@ class DataModule(pl.LightningDataModule):
                 ImageFolder, root=os.path.join(self.root, "test")
             )
             print(f"Using custom dataset from {self.root}")
-        else:
+
+        elif self.dataset not in _DATASET_CATALOG :
             pass
 
             try:
@@ -367,6 +388,23 @@ class DataModule(pl.LightningDataModule):
     #     return ImageFilelist(root=self.root, flist=root + "/train800.txt",
     #             transform=self.transforms_train)
 
+
+    def get_num_classes(self):
+        # Define the number of classes based on your dataset
+        if self.dataset == 'CUB_200_2011':
+            return 200
+        elif self.dataset == 'OxfordFlower':
+            return 102
+        elif self.dataset == 'nabirds':
+            return 55
+        elif self.dataset == 'StanfordDogs':
+            return 120
+        elif self.dataset == 'StanfordCars':
+            return 196
+        else:
+            raise ValueError(f"Unknown dataset: {self.dataset_name}")
+
+
     def setup(self, stage="fit"):
         if self.dataset == "custom":
             if stage == "fit":
@@ -378,7 +416,9 @@ class DataModule(pl.LightningDataModule):
                 self.val_dataset = self.val_dataset_fn(transform=self.transforms_test)
             elif stage == "test":
                 self.test_dataset = self.test_dataset_fn(transform=self.transforms_test)
-        else:
+        
+
+        elif self.dataset not in _DATASET_CATALOG :
             if stage == "fit":
                 print('>>>> Stage fit \n \n \n')
                 # self.train_dataset = self.train_dataset_fn(
@@ -409,6 +449,11 @@ class DataModule(pl.LightningDataModule):
                 transform=self.transforms_test)
 
     def train_dataloader(self):
+        if self.dataset in _DATASET_CATALOG :
+            print("FVCG dataset !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            train_dl = construct_train_loader(self.dataset, batch_size= self.batch_size)
+            return train_dl
+
         return DataLoader(
             self.train_dataset,
             batch_size=self.batch_size,
@@ -419,6 +464,11 @@ class DataModule(pl.LightningDataModule):
         )
 
     def val_dataloader(self):
+        if self.dataset in _DATASET_CATALOG :
+            test_dl = construct_test_loader(self.dataset, batch_size= self.batch_size)
+            print("FVCG dataset !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            return test_dl
+
         return DataLoader(
             self.val_dataset,
             batch_size=self.batch_size,
@@ -428,6 +478,12 @@ class DataModule(pl.LightningDataModule):
         )
 
     def test_dataloader(self):
+        if self.dataset in _DATASET_CATALOG :
+            test_dl = construct_test_loader(self.dataset, batch_size= self.batch_size)
+            print("FVCG dataset !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            return test_dl
+            
+
         return DataLoader(
             self.test_dataset,
             batch_size=self.batch_size,

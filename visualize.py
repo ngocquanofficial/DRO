@@ -9,7 +9,7 @@ import random
 print("FINISH IMPORTING")
 # Load the trained model checkpoint
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-checkpoint_path = "/home/ubuntu/newDRO/dro_best_val_acc_1.0.ckpt"  # Replace with your actual path
+checkpoint_path = "/home/ubuntu/DRO/saved_checkpoints/svhn/nodiv85.ckpt"  # Replace with your actual path
 model = ClassificationModel.load_from_checkpoint(checkpoint_path)
 model.eval()
 model.to(device)
@@ -28,6 +28,7 @@ data_module.setup(stage="test")
 
 # Get the test dataloader
 test_dataloader = data_module.test_dataloader()
+print(len(test_dataloader), "!!!!!!!!!!!!!!!!!!")
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -51,7 +52,7 @@ def main(true_label= 0) :
             total_true_sample += len(true_label_indices)
             if len(true_label_indices) > 0:
                 # Get model predictions for these filtered samples
-                outputs = model(inputs[true_label_indices])  # outputs is a list of tensors
+                outputs = model(inputs)  # outputs is a list of tensors
                 # Calculate the average prediction across the models
                 avg_predictions = torch.mean(torch.stack(outputs), dim=0)  # shape: (batch_size, dimension)
                 
@@ -124,6 +125,7 @@ def main(true_label= 0) :
             bars[true_label].set_color(highlight_color)
             bars[true_label].set_edgecolor(highlight_edge_color)
 
+            axes[row, col].set_ylim(0, 0.4)
             # Set larger tick labels for x and y axes
             axes[row, col].tick_params(axis='x', labelsize=23)  # Increase x-axis tick labels size
             axes[row, col].tick_params(axis='y', labelsize=23)  # Increase y-axis tick labels size

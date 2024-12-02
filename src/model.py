@@ -265,8 +265,14 @@ class ClassificationModel(pl.LightningModule):
         return res
 
     def shared_step(self, batch, mode="train", logging= True):
-        x, y = batch
-        x, y = x.cuda(), y.cuda()
+        # x, y = batch
+        # x, y = x.cuda(), y.cuda()
+        
+        if not isinstance(batch["image"], torch.Tensor):
+            for k, v in batch.items():
+                data[k] = torch.from_numpy(v)
+        x = batch["image"].float().cuda()
+        y = batch["label"].cuda()
 
         if mode == "train":
             # Only converts targets to one-hot if no label smoothing, mixup or cutmix is set
